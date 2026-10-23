@@ -425,13 +425,13 @@ const title = order ? `Servicio #${order.id}` : "Servicio no encontrado";
   }
 </Layout>
 
-{
-  order && (
-    <script define:vars={{ serviceId: order.id, isTerminal }}>
-      import { apiFetch, postJson } from "../../lib/api.js";
-      import { confirmAction, describeApiError, setBusy, toast } from "../../lib/ui.js";
+<script>
+  import { apiFetch, postJson } from "../../lib/api.js";
+  import { confirmAction, describeApiError, setBusy, toast } from "../../lib/ui.js";
 
-      const transitionButtons = document.querySelectorAll("[data-transition]");
+  const serviceId = location.pathname.split("/").filter(Boolean).pop();
+
+  const transitionButtons = document.querySelectorAll("[data-transition]");
       const commentField = document.getElementById("transition-comment");
 
       transitionButtons.forEach((button) => {
@@ -519,6 +519,4 @@ const title = order ? `Servicio #${order.id}` : "Servicio no encontrado";
           }
         });
       });
-    </script>
-  )
-}
+</script>
