@@ -120,9 +120,7 @@ class SqlServiceOrderRepository:
         statement = (
             select(ServiceOrder)
             .where(
-                *_order_filters(
-                    status=status, customer_id=customer_id, equipment_id=equipment_id
-                )
+                *_order_filters(status=status, customer_id=customer_id, equipment_id=equipment_id)
             )
             .order_by(ServiceOrder.received_at.desc(), ServiceOrder.id.desc())
             .limit(limit)
@@ -137,9 +135,11 @@ class SqlServiceOrderRepository:
         customer_id: int | None = None,
         equipment_id: int | None = None,
     ) -> int:
-        statement = select(func.count()).select_from(ServiceOrder).where(
-            *_order_filters(
-                status=status, customer_id=customer_id, equipment_id=equipment_id
+        statement = (
+            select(func.count())
+            .select_from(ServiceOrder)
+            .where(
+                *_order_filters(status=status, customer_id=customer_id, equipment_id=equipment_id)
             )
         )
         return self._session.scalar(statement) or 0
@@ -188,9 +188,7 @@ class SqlServiceOrderRepository:
         )
         return [_to_detail_record(detail) for detail in details]
 
-    def get_detail(
-        self, service_order_id: int, detail_id: int
-    ) -> ServiceDetailRecord | None:
+    def get_detail(self, service_order_id: int, detail_id: int) -> ServiceDetailRecord | None:
         detail = self._session.scalars(
             select(ServiceDetail).where(
                 ServiceDetail.id == detail_id,
@@ -299,6 +297,13 @@ class SqlServiceOrderRepository:
             .order_by(ServiceOrder.received_at.desc(), ServiceOrder.id.desc())
         )
         return [_to_order_record(order) for order in self._session.scalars(statement)]
+
+    def find_by_origin(self, origin_service_id: int) -> ServiceOrderRecord | None:
+        """Reingreso ya vinculado al origen, si existe (UNIQUE, riesgo R-06)."""
+        order = self._session.scalars(
+            select(ServiceOrder).where(ServiceOrder.origin_service_id == origin_service_id)
+        ).first()
+        return None if order is None else _to_order_record(order)
 
     def list_details_for_orders(
         self, service_order_ids: Sequence[int]

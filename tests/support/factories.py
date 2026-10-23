@@ -57,9 +57,7 @@ def catalog_ids(session: Session) -> dict[str, int]:
     }
 
 
-def make_customer(
-    session: Session, name: str = "Ana Pérez", phone: str = "999111222"
-) -> Customer:
+def make_customer(session: Session, name: str = "Ana Pérez", phone: str = "999111222") -> Customer:
     """Cliente persistido con contacto mínimo."""
     customer = Customer(name=name, phone=phone)
     session.add(customer)

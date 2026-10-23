@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from app.db.models import Component
 from support.factories import (
     SERVICE_ORDERS_URL,
     add_diagnostic_detail,
@@ -18,6 +16,8 @@ from support.factories import (
     drive_to,
     transition,
 )
+
+from app.db.models import Component
 
 ORDERS = SERVICE_ORDERS_URL
 

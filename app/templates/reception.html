@@ -88,6 +88,49 @@
       </p>
     </fieldset>
 
-    <button type="submit">Registrar recepción</button>
+    {% if warranty_candidates %}
+    <fieldset>
+      <legend>Garantía</legend>
+      <p class="muted">
+        Este equipo tiene servicios entregados dentro de la garantía de 90 días.
+        Elija vincular el reingreso o registrar un servicio nuevo.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Servicio de origen</th>
+            <th>Entrega</th>
+            <th>Falla reportada</th>
+            <th>Decisión</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for candidate in warranty_candidates %}
+            <tr>
+              <td>#{{ candidate.service_order_id }}</td>
+              <td>
+                {{ candidate.days_since_delivery }} días desde la entrega ·
+                {{ candidate.warranty_days_left }} días de garantía restantes
+              </td>
+              <td>{{ candidate.reported_failure }}</td>
+              <td>
+                <button type="submit" name="origin_service_id" value="{{ candidate.service_order_id }}">
+                  Vincular este reingreso
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted">
+        Un servicio de origen ya vinculado no admite un segundo reingreso: en ese caso
+        vincule el nuevo servicio al reingreso anterior.
+      </p>
+    </fieldset>
+    {% endif %}
+
+    <button type="submit">
+      {% if warranty_candidates %}Registrar como servicio nuevo{% else %}Registrar recepción{% endif %}
+    </button>
   </form>
 {% endblock %}

@@ -89,6 +89,7 @@ def create_service_order(
         accessories=payload.accessories,
         physical_condition=payload.physical_condition,
         password_requested=payload.password_requested,
+        origin_service_id=payload.origin_service_id,
     )
     return to_read(view)
 
@@ -115,9 +116,7 @@ def list_service_orders(
         limit=limit,
         offset=offset,
     )
-    return ServiceOrderPage(
-        items=[to_read(item) for item in page.items], total=page.total
-    )
+    return ServiceOrderPage(items=[to_read(item) for item in page.items], total=page.total)
 
 
 @router.get(
@@ -265,8 +264,6 @@ def create_service_detail(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Corrige una línea mal cargada",
 )
-def delete_service_detail(
-    service_order_id: int, detail_id: int, session: SessionDep
-) -> None:
+def delete_service_detail(service_order_id: int, detail_id: int, session: SessionDep) -> None:
     """Borra la línea solo si la orden no es terminal."""
     build_service_detail_service(session).delete(service_order_id, detail_id)

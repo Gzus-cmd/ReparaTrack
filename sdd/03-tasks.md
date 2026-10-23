@@ -286,6 +286,7 @@ OpenAPI y automatización. **RF:** RF-09, RF-10, NFR-05, NFR-06.
 | RF-08 / HU-08 Historial | T-13, T-30, T-31 | `test_equipments_api.py`, `test_customers_api.py`, `test_service_order_repository.py` | RN-02, RN-05 |
 | RF-09 / HU-09 Garantía | T-06, T-32, T-33 | `test_rules_warranty.py`, `test_warranty_api.py`, `test_web_smoke.py` | RN-04 |
 | RF-10 / HU-10 Abandono | T-07, T-08, T-34, T-35 | `test_rules_abandonment.py`, `test_abandonment_api.py` | RN-07, RN-10 |
+| NFR-05 / Respaldo | T-36 | verificación manual reproducible documentada en `README.md` §3 | — |
 | NFR-06 / CI | T-36, T-37 | comandos de calidad del plan §4.5 | — |
 
 ---

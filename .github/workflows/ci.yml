@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, testing, "feature/**", "bugfix/**", "hotfix/**", "release/**"]
+  pull_request:
+
+jobs:
+  calidad:
+    name: Calidad (lint, formato, pruebas y cobertura)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install fastapi sqlalchemy jinja2 pytest pytest-cov httpx ruff
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Formato (ruff format --check)
+        run: ruff format --check .
+
+      - name: Pruebas unitarias
+        run: pytest tests/unit -q --no-cov
+
+      - name: Pruebas de integración
+        run: pytest tests/integration -q --no-cov
+
+      - name: Cobertura (umbral 80 %)
+        run: pytest --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=80 -q

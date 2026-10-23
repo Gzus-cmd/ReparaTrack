@@ -268,6 +268,8 @@ class ServiceOrderRepository(Protocol):
 
     def list_for_equipment(self, equipment_id: int) -> Sequence[ServiceOrderRecord]: ...
 
+    def find_by_origin(self, origin_service_id: int) -> ServiceOrderRecord | None: ...
+
     def list_for_customer(
         self,
         customer_id: int,

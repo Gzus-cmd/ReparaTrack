@@ -62,8 +62,7 @@ class ServiceDetailService:
         """Líneas registradas, en orden de carga."""
         self._order_or_404(service_order_id)
         return [
-            self._view(detail)
-            for detail in self._service_orders.list_details(service_order_id)
+            self._view(detail) for detail in self._service_orders.list_details(service_order_id)
         ]
 
     def add(

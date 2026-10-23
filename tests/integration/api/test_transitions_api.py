@@ -262,9 +262,7 @@ def test_allowed_transitions_block_ready_for_pickup_without_details(client, sess
     assert _option(_allowed(client, order["id"]), "READY_FOR_PICKUP")["blocked_reason"] is None
 
 
-def test_allowed_transitions_block_abandonment_before_the_threshold(
-    client, session, clock
-) -> None:
+def test_allowed_transitions_block_abandonment_before_the_threshold(client, session, clock) -> None:
     order = create_order(client, session)
     drive_to(client, session, order["id"], "AWAITING_APPROVAL")
     clock.travel(days=29)

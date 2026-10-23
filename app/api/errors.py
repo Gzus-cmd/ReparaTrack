@@ -30,6 +30,10 @@ STATUS_BY_CODE: dict[str, int] = {
     "threshold_not_reached": status.HTTP_409_CONFLICT,
     "confirmation_required": status.HTTP_409_CONFLICT,
     "service_order_terminal": status.HTTP_409_CONFLICT,
+    "warranty_expired": status.HTTP_409_CONFLICT,
+    "warranty_equipment_mismatch": status.HTTP_409_CONFLICT,
+    "origin_not_delivered": status.HTTP_409_CONFLICT,
+    "origin_already_linked": status.HTTP_409_CONFLICT,
 }
 
 DEFAULT_ERROR_STATUS = status.HTTP_409_CONFLICT
