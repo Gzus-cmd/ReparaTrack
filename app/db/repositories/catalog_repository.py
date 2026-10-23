@@ -56,6 +56,10 @@ class SqlCatalogRepository:
         )
         return [_to_record(row) for row in rows]
 
+    def list_all(self) -> list[CatalogValue]:
+        rows = self._session.scalars(select(self._model).order_by(self._model.name))
+        return [_to_record(row) for row in rows]
+
     def find_by_normalized_name(self, name: str) -> CatalogValue | None:
         normalized = normalize_name(name)
         for row in self._session.scalars(select(self._model)):
@@ -72,3 +76,29 @@ class SqlCatalogRepository:
             )
             or 0
         )
+
+    def rename(self, catalog_id: int, name: str) -> CatalogValue | None:
+        row = self._session.get(self._model, catalog_id)
+        if row is None:
+            return None
+        row.name = " ".join(name.split())
+        self._session.flush()
+        self._session.refresh(row)
+        return _to_record(row)
+
+    def set_active(self, catalog_id: int, *, is_active: bool) -> CatalogValue | None:
+        row = self._session.get(self._model, catalog_id)
+        if row is None:
+            return None
+        row.is_active = is_active
+        self._session.flush()
+        self._session.refresh(row)
+        return _to_record(row)
+
+    def delete(self, catalog_id: int) -> bool:
+        row = self._session.get(self._model, catalog_id)
+        if row is None:
+            return False
+        self._session.delete(row)
+        self._session.flush()
+        return True

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from sqlalchemy import or_, select
+from collections.abc import Mapping
+from typing import Any
+
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models.customer import Customer
@@ -17,6 +20,16 @@ def _to_record(customer: Customer) -> CustomerRecord:
         email=customer.email,
         document=customer.document,
         created_at=customer.created_at,
+    )
+
+
+def _search_filter(query: str) -> ColumnElement[bool]:
+    """Filtro único de búsqueda, reutilizado por el listado y el conteo."""
+    pattern = f"%{query.strip()}%"
+    return or_(
+        Customer.name.ilike(pattern),
+        Customer.phone.ilike(pattern),
+        Customer.document.ilike(pattern),
     )
 
 
@@ -49,19 +62,37 @@ class SqlCustomerRepository:
         customer = self._session.get(Customer, customer_id)
         return None if customer is None else _to_record(customer)
 
+    def find_by_document(self, document: str) -> CustomerRecord | None:
+        normalized = document.strip()
+        if not normalized:
+            return None
+        customer = self._session.scalars(
+            select(Customer).where(Customer.document == normalized)
+        ).first()
+        return None if customer is None else _to_record(customer)
+
+    def count(self, query: str = "") -> int:
+        statement = select(func.count()).select_from(Customer)
+        if query.strip():
+            statement = statement.where(_search_filter(query))
+        return self._session.scalar(statement) or 0
+
+    def update_contact(self, customer_id: int, changes: Mapping[str, Any]) -> CustomerRecord | None:
+        customer = self._session.get(Customer, customer_id)
+        if customer is None:
+            return None
+        for field in ("name", "phone", "email", "document"):
+            if field in changes:
+                setattr(customer, field, changes[field])
+        self._session.flush()
+        self._session.refresh(customer)
+        return _to_record(customer)
+
     def search(self, query: str, *, limit: int = 50, offset: int = 0) -> list[CustomerRecord]:
-        pattern = f"%{query.strip()}%"
+        statement = select(Customer)
+        if query.strip():
+            statement = statement.where(_search_filter(query))
         customers = self._session.scalars(
-            select(Customer)
-            .where(
-                or_(
-                    Customer.name.ilike(pattern),
-                    Customer.phone.ilike(pattern),
-                    Customer.document.ilike(pattern),
-                )
-            )
-            .order_by(Customer.name, Customer.id)
-            .limit(limit)
-            .offset(offset)
+            statement.order_by(Customer.name, Customer.id).limit(limit).offset(offset)
         )
         return [_to_record(customer) for customer in customers]

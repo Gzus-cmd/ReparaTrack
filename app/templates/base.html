@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}ReparaTrack{% endblock %}</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; line-height: 1.5; }
+      main { max-width: 60rem; margin: 0 auto; }
+      h1 { font-size: 1.5rem; }
+      h2 { font-size: 1.15rem; margin-top: 2rem; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #8884; }
+      form { display: inline; }
+      .muted { opacity: 0.7; }
+      .error { padding: 0.6rem 0.8rem; border: 1px solid #c33; border-radius: 0.4rem; color: #c33; }
+      .tag { font-size: 0.8rem; padding: 0.1rem 0.4rem; border-radius: 0.6rem; background: #8883; }
+    </style>
+  </head>
+  <body>
+    <main>
+      {% if error %}<p class="error">{{ error }}</p>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>
