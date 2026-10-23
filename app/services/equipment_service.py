@@ -173,6 +173,11 @@ class EquipmentService:
             previous_services_count=0,
         )
 
+    def list_all(self, *, limit: int = 50, offset: int = 0) -> list[EquipmentView]:
+        """Lista los equipos registrados, del más reciente al más antiguo."""
+        records = self._equipment_repository.list_all(limit=limit, offset=offset)
+        return [self._view(record) for record in records]
+
     def lookup(
         self, *, internal_code: str | None = None, serial_number: str | None = None
     ) -> EquipmentView:

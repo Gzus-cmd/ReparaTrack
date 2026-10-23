@@ -193,6 +193,10 @@ class EquipmentRepository(Protocol):
 
     def find_by_serial_number(self, serial_number: str) -> EquipmentRecord | None: ...
 
+    def list_all(self, *, limit: int = 50, offset: int = 0) -> list[EquipmentRecord]: ...
+
+    def count(self) -> int: ...
+
 
 @runtime_checkable
 class ServiceOrderRepository(Protocol):

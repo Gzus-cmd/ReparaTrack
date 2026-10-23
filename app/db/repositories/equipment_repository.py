@@ -7,7 +7,7 @@ y nunca se usa `MAX(id) + 1`.
 
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -100,6 +100,19 @@ class SqlEquipmentRepository:
             .order_by(Equipment.id)
         ).first()
         return None if equipment is None else _to_record(equipment)
+
+    def list_all(self, *, limit: int = 50, offset: int = 0) -> list[EquipmentRecord]:
+        """Lista los equipos del más reciente al más antiguo."""
+        rows = self._session.scalars(
+            select(Equipment)
+            .order_by(Equipment.created_at.desc(), Equipment.id.desc())
+            .limit(limit)
+            .offset(offset)
+        ).all()
+        return [_to_record(row) for row in rows]
+
+    def count(self) -> int:
+        return int(self._session.scalar(select(func.count()).select_from(Equipment)) or 0)
 
     def _ensure_counter(self) -> None:
         if self._session.get(CodeCounter, EQUIPMENT_COUNTER) is None:

@@ -197,7 +197,7 @@ def seed_demo(session: Session) -> dict:
         (0, 0, FAILURES[0], CONDITIONS[0], "Cargador", [("RECEIVED", 90)] + FLOW, work_maintenance),
         (1, 1, FAILURES[2], CONDITIONS[2], "Cargador y mouse", [("RECEIVED", 45)] + FLOW, work_format),
         (2, 2, FAILURES[4], CONDITIONS[2], "Cable de poder", [("RECEIVED", 5), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("IN_REPAIR", 1)], work_change_disk),
-        (3, 3, FAILURES[1], CONDITIONS[1], "Cargador", [("RECEIVED", 3), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("IN_REPAIR", 1), ("READY_FOR_PICKUP", 1)], work_pad),
+        (3, 3, FAILURES[1], CONDITIONS[1], "Cargador", [("RECEIVED", 6), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("IN_REPAIR", 1), ("READY_FOR_PICKUP", 1)], work_pad),
         (4, 4, FAILURES[5], CONDITIONS[2], "Cargador", [("RECEIVED", 10), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1)], work_maintenance),
         (5, 5, FAILURES[3], CONDITIONS[2], "Cable de poder", [("RECEIVED", 2), ("DIAGNOSING", 1), ("AWAITING_PART", 1)], work_battery),
         (6, 6, FAILURES[6], CONDITIONS[3], "Cargador", [("RECEIVED", 1), ("DIAGNOSING", 1)], work_keyboard),

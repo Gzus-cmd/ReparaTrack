@@ -543,3 +543,17 @@ def test_equipment_history_rejects_an_unknown_section(client, session: Session) 
     error = response.json()["error"]
     assert error["code"] == "validation_error"
     assert error["details"]["field"] == "include"
+
+
+def test_list_equipments_returns_the_most_recent_first(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    _post_equipment(client, device_type_id, brand_id, model="Pavilion 15", serial_number="SN-1")
+    _post_equipment(client, device_type_id, brand_id, model="IdeaPad")
+
+    response = client.get(API)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["model"] for item in body] == ["IdeaPad", "Pavilion 15"]
+    assert body[0]["internal_code"].startswith("EQ-")
+    assert "customer_id" not in body[0]

@@ -139,6 +139,21 @@ def lookup_equipment(
     return _to_read(view)
 
 
+@router.get(
+    "",
+    response_model=list[EquipmentRead],
+    summary="Lista los equipos registrados",
+)
+def list_equipments(
+    session: SessionDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> list[EquipmentRead]:
+    """Devuelve los equipos ordenados del más reciente al más antiguo."""
+    views = build_equipment_service(session).list_all(limit=limit, offset=offset)
+    return [_to_read(view) for view in views]
+
+
 @router.post(
     "",
     response_model=EquipmentRead,
