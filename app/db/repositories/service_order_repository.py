@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models.service_order import ServiceDetail, ServiceOrder
@@ -39,6 +39,23 @@ def _to_detail_record(detail: ServiceDetail) -> ServiceDetailRecord:
         description=detail.description,
         created_at=detail.created_at,
     )
+
+
+def _order_filters(
+    *,
+    status: str | None,
+    customer_id: int | None,
+    equipment_id: int | None,
+) -> list[ColumnElement[bool]]:
+    """Condiciones de la bandeja, compartidas por el listado y el conteo."""
+    conditions: list[ColumnElement[bool]] = []
+    if status is not None:
+        conditions.append(ServiceOrder.status == ServiceStatus.parse(status))
+    if customer_id is not None:
+        conditions.append(ServiceOrder.customer_id == customer_id)
+    if equipment_id is not None:
+        conditions.append(ServiceOrder.equipment_id == equipment_id)
+    return conditions
 
 
 class SqlServiceOrderRepository:
@@ -82,6 +99,59 @@ class SqlServiceOrderRepository:
         order = self._session.get(ServiceOrder, service_order_id)
         return None if order is None else _to_order_record(order)
 
+    def list(
+        self,
+        *,
+        status: str | None = None,
+        customer_id: int | None = None,
+        equipment_id: int | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Sequence[ServiceOrderRecord]:
+        statement = (
+            select(ServiceOrder)
+            .where(
+                *_order_filters(
+                    status=status, customer_id=customer_id, equipment_id=equipment_id
+                )
+            )
+            .order_by(ServiceOrder.received_at.desc(), ServiceOrder.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return [_to_order_record(order) for order in self._session.scalars(statement)]
+
+    def count(
+        self,
+        *,
+        status: str | None = None,
+        customer_id: int | None = None,
+        equipment_id: int | None = None,
+    ) -> int:
+        statement = select(func.count()).select_from(ServiceOrder).where(
+            *_order_filters(
+                status=status, customer_id=customer_id, equipment_id=equipment_id
+            )
+        )
+        return self._session.scalar(statement) or 0
+
+    def update_status(
+        self,
+        service_order_id: int,
+        *,
+        status: str,
+        delivered_at: datetime | None = None,
+    ) -> ServiceOrderRecord | None:
+        """Actualiza estado y fecha de entrega dentro de la transacción abierta."""
+        order = self._session.get(ServiceOrder, service_order_id)
+        if order is None:
+            return None
+        order.status = ServiceStatus.parse(status)
+        order.delivered_at = delivered_at
+        self._session.flush()
+        self._session.refresh(order)
+        return _to_order_record(order)
+
     def add_detail(
         self,
         *,
@@ -108,6 +178,26 @@ class SqlServiceOrderRepository:
             .order_by(ServiceDetail.id)
         )
         return [_to_detail_record(detail) for detail in details]
+
+    def get_detail(
+        self, service_order_id: int, detail_id: int
+    ) -> ServiceDetailRecord | None:
+        detail = self._session.scalars(
+            select(ServiceDetail).where(
+                ServiceDetail.id == detail_id,
+                ServiceDetail.service_order_id == service_order_id,
+            )
+        ).first()
+        return None if detail is None else _to_detail_record(detail)
+
+    def delete_detail(self, service_order_id: int, detail_id: int) -> bool:
+        """Borra solo si la línea pertenece a la orden indicada."""
+        detail = self._session.get(ServiceDetail, detail_id)
+        if detail is None or detail.service_order_id != service_order_id:
+            return False
+        self._session.delete(detail)
+        self._session.flush()
+        return True
 
     def count_details(self, service_order_id: int) -> int:
         return (

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Servicio #{{ order.id }} · ReparaTrack{% endblock %}
+{% block content %}
+  <h1>Servicio #{{ order.id }}</h1>
+  <p>
+    Estado actual:
+    {% include "partials/state_badge.html" %}
+  </p>
+
+  <table>
+    <tbody>
+      <tr>
+        <th>Equipo</th>
+        <td>{{ order.equipment.internal_code }} · {{ order.equipment.model }}</td>
+      </tr>
+      <tr>
+        <th>Cliente</th>
+        <td>{{ order.customer.name }} · {{ order.customer.phone }}</td>
+      </tr>
+      <tr>
+        <th>Recibido</th>
+        <td>{{ order.received_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      </tr>
+      <tr>
+        <th>Entregado</th>
+        <td>
+          {{ order.delivered_at.strftime("%Y-%m-%d %H:%M") if order.delivered_at else "—" }}
+        </td>
+      </tr>
+      <tr>
+        <th>Días en el estado</th>
+        <td>{{ order.days_in_status }}</td>
+      </tr>
+      <tr>
+        <th>Días desde la recepción</th>
+        <td>{{ order.days_since_reception }}</td>
+      </tr>
+      <tr>
+        <th>Falla reportada</th>
+        <td>{{ order.reported_failure }}</td>
+      </tr>
+      <tr>
+        <th>Accesorios</th>
+        <td>{{ order.accessories }}</td>
+      </tr>
+      <tr>
+        <th>Condición física</th>
+        <td>{{ order.physical_condition }} <span class="muted">(inmutable)</span></td>
+      </tr>
+      <tr>
+        <th>Contraseña solicitada</th>
+        <td>{{ "Sí" if order.password_requested else "No" }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Transiciones</h2>
+  {% if order.transitions %}
+    {% for option in order.transitions %}
+      {% if option.blocked_reason is none %}
+        <form method="post" action="/service-orders/{{ order.id }}/transitions">
+          <input type="hidden" name="to_status" value="{{ option.to_status }}" />
+          {% if option.to_status == "ABANDONED" %}
+            <input type="hidden" name="confirm" value="true" />
+          {% endif %}
+          <button type="submit">{{ option.status_label }}</button>
+        </form>
+      {% else %}
+        {% set reason_labels = {
+          "details_required": "faltan líneas de detalle",
+          "threshold_not_reached": "no se alcanzó el umbral de días"
+        } %}
+        <p class="muted">
+          {{ option.status_label }} no disponible:
+          {{ reason_labels.get(option.blocked_reason, option.blocked_reason) }}.
+        </p>
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    <p class="muted">El servicio está cerrado: no admite más transiciones.</p>
+  {% endif %}
+
+  <h2>Detalles</h2>
+  {% if details %}
+    <table>
+      <thead>
+        <tr>
+          <th>Operación</th>
+          <th>Componente</th>
+          <th>Descripción</th>
+          <th>Registrado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for detail in details %}
+          <tr>
+            <td>{{ detail.operation_type.name }}</td>
+            <td>{{ detail.component.name if detail.component else "—" }}</td>
+            <td>{{ detail.description }}</td>
+            <td>{{ detail.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Sin líneas de detalle registradas.</p>
+  {% endif %}
+
+  <h2>Historial</h2>
+  {% if history %}
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha y hora</th>
+          <th>Estado</th>
+          <th>Comentario</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in history %}
+          <tr>
+            <td>{{ entry.changed_at.strftime("%Y-%m-%d %H:%M") }}</td>
+            <td>{{ entry.status_label }}</td>
+            <td>{{ entry.comment or "—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">Sin movimientos registrados.</p>
+  {% endif %}
+{% endblock %}

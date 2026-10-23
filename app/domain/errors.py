@@ -207,3 +207,51 @@ class UnknownStatusError(DomainError):
             message or f"Estado desconocido: {value!r}.",
             value=value,
         )
+
+
+class EquipmentSourceInvalidError(DomainError):
+    """La recepción exige exactamente un equipo: existente o nuevo (XOR)."""
+
+    code = "equipment_source_invalid"
+    default_message = "Indique un equipo existente o los datos de uno nuevo, pero no ambos."
+
+
+class ServiceOrderTerminalError(DomainError):
+    """Un estado terminal cierra el ciclo: no admite más líneas ni cambios."""
+
+    code = "service_order_terminal"
+    default_message = "La orden está en un estado terminal y no admite cambios."
+
+    def __init__(
+        self,
+        service_order_id: int,
+        status: Any,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(
+            message or "La orden está en un estado terminal y no admite cambios.",
+            service_order_id=service_order_id,
+            status=_status_value(status),
+        )
+
+
+class ImmutableFieldError(DomainError):
+    """RN-08: la evidencia de recepción se fija una vez y no se edita."""
+
+    code = "immutable_field"
+    default_message = "El campo es inmutable y no se puede editar."
+
+    def __init__(
+        self,
+        field: str = "physical_condition",
+        previous: Any = None,
+        new: Any = None,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(
+            message or f"El campo {field} es inmutable y no se puede editar.",
+            field=field,
+            previous=previous,
+            new=new,
+        )
+

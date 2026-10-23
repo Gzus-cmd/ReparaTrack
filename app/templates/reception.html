@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Recepción · ReparaTrack{% endblock %}
+{% block content %}
+  <h1>Recepción de equipo</h1>
+  <p class="muted">
+    Cinco datos obligatorios. La condición física queda fijada como evidencia y no se
+    puede editar después.
+  </p>
+
+  <form method="post" action="/reception">
+    <fieldset>
+      <legend>Cliente</legend>
+      <label for="customer_id">Cliente</label>
+      <select id="customer_id" name="customer_id" required>
+        <option value="">Seleccione un cliente</option>
+        {% for customer in customers %}
+          <option value="{{ customer.id }}">{{ customer.name }} · {{ customer.phone }}</option>
+        {% endfor %}
+      </select>
+    </fieldset>
+
+    <fieldset>
+      <legend>Equipo</legend>
+      <p>
+        <label>
+          <input type="radio" name="equipment_mode" value="existing" checked />
+          Equipo existente
+        </label>
+        <label>
+          <input type="radio" name="equipment_mode" value="new" />
+          Equipo nuevo
+        </label>
+      </p>
+      <label for="equipment_internal_code">Código interno del equipo existente</label>
+      <input
+        id="equipment_internal_code"
+        name="equipment_internal_code"
+        type="text"
+        maxlength="12"
+        placeholder="EQ-000001"
+      />
+      <p class="muted">Si el equipo es nuevo, complete los datos siguientes:</p>
+      <label for="new_device_type_id">Tipo de dispositivo</label>
+      <select id="new_device_type_id" name="new_device_type_id">
+        <option value="">Seleccione un tipo</option>
+        {% for value in device_types %}
+          <option value="{{ value.id }}">{{ value.name }}</option>
+        {% endfor %}
+      </select>
+      <label for="new_brand_id">Marca</label>
+      <select id="new_brand_id" name="new_brand_id">
+        <option value="">Seleccione una marca</option>
+        {% for value in brands %}
+          <option value="{{ value.id }}">{{ value.name }}</option>
+        {% endfor %}
+      </select>
+      <label for="new_model">Modelo</label>
+      <input id="new_model" name="new_model" type="text" maxlength="120" />
+      <label for="new_serial_number">Número de serie (opcional)</label>
+      <input id="new_serial_number" name="new_serial_number" type="text" maxlength="120" />
+    </fieldset>
+
+    <fieldset>
+      <legend>Recepción</legend>
+      <label for="reported_failure">Falla reportada</label>
+      <textarea
+        id="reported_failure"
+        name="reported_failure"
+        required
+        maxlength="500"
+        rows="2"
+      ></textarea>
+      <label for="accessories">Accesorios</label>
+      <input id="accessories" name="accessories" type="text" required maxlength="500" />
+      <label for="physical_condition">Condición física</label>
+      <textarea
+        id="physical_condition"
+        name="physical_condition"
+        required
+        maxlength="500"
+        rows="2"
+      ></textarea>
+      <p>
+        <label>
+          <input type="checkbox" name="password_requested" value="on" />
+          ¿Se solicitó la contraseña? (solo se registra el indicador)
+        </label>
+      </p>
+    </fieldset>
+
+    <button type="submit">Registrar recepción</button>
+  </form>
+{% endblock %}

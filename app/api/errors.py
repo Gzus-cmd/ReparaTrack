@@ -20,6 +20,7 @@ STATUS_BY_CODE: dict[str, int] = {
     "validation_error": 422,
     "unknown_status": 422,
     "equipment_source_invalid": 422,
+    "immutable_field": 422,
     "catalog_duplicate": status.HTTP_409_CONFLICT,
     "catalog_value_in_use": status.HTTP_409_CONFLICT,
     "document_duplicate": status.HTTP_409_CONFLICT,
@@ -28,6 +29,7 @@ STATUS_BY_CODE: dict[str, int] = {
     "details_required": status.HTTP_409_CONFLICT,
     "threshold_not_reached": status.HTTP_409_CONFLICT,
     "confirmation_required": status.HTTP_409_CONFLICT,
+    "service_order_terminal": status.HTTP_409_CONFLICT,
 }
 
 DEFAULT_ERROR_STATUS = status.HTTP_409_CONFLICT

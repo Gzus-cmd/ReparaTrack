@@ -184,6 +184,32 @@ class ServiceOrderRepository(Protocol):
 
     def get(self, service_order_id: int) -> ServiceOrderRecord | None: ...
 
+    def list(
+        self,
+        *,
+        status: str | None = None,
+        customer_id: int | None = None,
+        equipment_id: int | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Sequence[ServiceOrderRecord]: ...
+
+    def count(
+        self,
+        *,
+        status: str | None = None,
+        customer_id: int | None = None,
+        equipment_id: int | None = None,
+    ) -> int: ...
+
+    def update_status(
+        self,
+        service_order_id: int,
+        *,
+        status: str,
+        delivered_at: datetime | None = None,
+    ) -> ServiceOrderRecord | None: ...
+
     def add_detail(
         self,
         *,
@@ -194,6 +220,12 @@ class ServiceOrderRepository(Protocol):
     ) -> ServiceDetailRecord: ...
 
     def list_details(self, service_order_id: int) -> Sequence[ServiceDetailRecord]: ...
+
+    def get_detail(
+        self, service_order_id: int, detail_id: int
+    ) -> ServiceDetailRecord | None: ...
+
+    def delete_detail(self, service_order_id: int, detail_id: int) -> bool: ...
 
     def count_details(self, service_order_id: int) -> int: ...
 
