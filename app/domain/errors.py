@@ -51,6 +51,78 @@ class DomainError(Exception):
         }
 
 
+class ValidationError(DomainError):
+    """Un dato de entrada no cumple las reglas de negocio del caso de uso."""
+
+    code = "validation_error"
+    default_message = "Datos de entrada inválidos."
+
+    def __init__(self, field: str, message: str | None = None, **details: Any) -> None:
+        super().__init__(message, field=field, **details)
+
+
+class NotFoundError(DomainError):
+    """El recurso solicitado no existe."""
+
+    code = "not_found"
+    default_message = "Recurso no encontrado."
+
+    def __init__(self, resource: str, identifier: Any, message: str | None = None) -> None:
+        super().__init__(
+            message or f"No se encontró {resource} con identificador {identifier}.",
+            resource=resource,
+            id=identifier,
+        )
+
+
+class CatalogDuplicateError(DomainError):
+    """RF-01: el nombre normalizado ya existe en el maestro (incluye inactivos)."""
+
+    code = "catalog_duplicate"
+    default_message = "El valor del maestro ya existe."
+
+    def __init__(self, name: str, existing_id: int | None = None, message: str | None = None):
+        super().__init__(
+            message or f"Ya existe un valor con el nombre {name!r} en este maestro.",
+            name=name,
+            existing_id=existing_id,
+        )
+
+
+class CatalogValueInUseError(DomainError):
+    """RN-09: un valor referenciado no se borra; se desactiva."""
+
+    code = "catalog_value_in_use"
+    default_message = "El valor del maestro está en uso y no se puede eliminar."
+
+    def __init__(
+        self,
+        catalog_id: int,
+        usage_count: int,
+        hint: str = "Use la baja lógica para desactivar el valor sin eliminarlo.",
+        message: str | None = None,
+    ) -> None:
+        super().__init__(
+            message or "El valor del maestro está en uso: se desactiva en vez de borrarse.",
+            catalog_id=catalog_id,
+            usage_count=usage_count,
+            hint=hint,
+        )
+
+
+class DocumentDuplicateError(DomainError):
+    """RF-02: el documento es un dato diferenciador y no se repite."""
+
+    code = "document_duplicate"
+    default_message = "El documento ya está registrado para otro cliente."
+
+    def __init__(self, document: str, message: str | None = None) -> None:
+        super().__init__(
+            message or f"El documento {document!r} ya está registrado para otro cliente.",
+            document=document,
+        )
+
+
 class InvalidTransitionError(DomainError):
     """La matriz cerrada de RN-05 no admite el par origen/destino."""
 

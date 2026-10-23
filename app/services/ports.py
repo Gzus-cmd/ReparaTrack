@@ -6,10 +6,10 @@ SQLAlchemy ni de FastAPI (regla de dependencia del plan §1.1).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,9 +104,17 @@ class CatalogRepository(Protocol):
 
     def list_active(self) -> list[CatalogValue]: ...
 
+    def list_all(self) -> list[CatalogValue]: ...
+
     def find_by_normalized_name(self, name: str) -> CatalogValue | None: ...
 
     def count_usages(self, catalog_id: int) -> int: ...
+
+    def rename(self, catalog_id: int, name: str) -> CatalogValue | None: ...
+
+    def set_active(self, catalog_id: int, *, is_active: bool) -> CatalogValue | None: ...
+
+    def delete(self, catalog_id: int) -> bool: ...
 
 
 @runtime_checkable
@@ -124,7 +132,15 @@ class CustomerRepository(Protocol):
 
     def get(self, customer_id: int) -> CustomerRecord | None: ...
 
+    def find_by_document(self, document: str) -> CustomerRecord | None: ...
+
     def search(self, query: str, *, limit: int = 50, offset: int = 0) -> list[CustomerRecord]: ...
+
+    def count(self, query: str = "") -> int: ...
+
+    def update_contact(
+        self, customer_id: int, changes: Mapping[str, Any]
+    ) -> CustomerRecord | None: ...
 
 
 @runtime_checkable
@@ -180,6 +196,10 @@ class ServiceOrderRepository(Protocol):
     def list_details(self, service_order_id: int) -> Sequence[ServiceDetailRecord]: ...
 
     def count_details(self, service_order_id: int) -> int: ...
+
+    def count_for_equipment(self, equipment_id: int) -> int: ...
+
+    def find_current_customer_id(self, equipment_id: int) -> int | None: ...
 
 
 @runtime_checkable

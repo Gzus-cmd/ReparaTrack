@@ -118,3 +118,23 @@ class SqlServiceOrderRepository:
             )
             or 0
         )
+
+    def count_for_equipment(self, equipment_id: int) -> int:
+        """Cantidad de servicios registrados para un equipo (RF-03)."""
+        return (
+            self._session.scalar(
+                select(func.count())
+                .select_from(ServiceOrder)
+                .where(ServiceOrder.equipment_id == equipment_id)
+            )
+            or 0
+        )
+
+    def find_current_customer_id(self, equipment_id: int) -> int | None:
+        """Cliente del último servicio del equipo (el dueño vigente)."""
+        return self._session.scalar(
+            select(ServiceOrder.customer_id)
+            .where(ServiceOrder.equipment_id == equipment_id)
+            .order_by(ServiceOrder.received_at.desc(), ServiceOrder.id.desc())
+            .limit(1)
+        )

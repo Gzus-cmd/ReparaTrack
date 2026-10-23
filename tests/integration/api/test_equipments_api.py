@@ -6,12 +6,14 @@ la propiedad vive en `service_orders` (spec §5, plan §2.2).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import delete, func, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models import Brand, CodeCounter, Customer, DeviceType, Equipment
+from app.db.models import Brand, CodeCounter, Customer, DeviceType, Equipment, ServiceOrder
 from app.db.repositories.equipment_repository import (
     DuplicateInternalCodeError,
     SqlEquipmentRepository,
@@ -220,3 +222,182 @@ def test_serial_lookup_returns_the_first_registered_equipment(session: Session) 
 
 def test_equipment_repository_satisfies_its_port(session: Session) -> None:
     assert isinstance(SqlEquipmentRepository(session), EquipmentRepository)
+
+
+# --- T-19 / T-20: alta con correlativo y búsqueda por HTTP (RF-03) -----------
+
+API = "/api/v1/equipments"
+NOW = datetime(2026, 10, 22, 15, 0, tzinfo=UTC)
+
+
+def _seeded_ids(session: Session) -> tuple[int, int]:
+    seed_catalogs(session)
+    device_type = session.scalars(select(DeviceType).where(DeviceType.name == "Laptop")).one()
+    brand = session.scalars(select(Brand).where(Brand.name == "HP")).one()
+    return device_type.id, brand.id
+
+
+def _post_equipment(client, device_type_id: int, brand_id: int, **overrides):
+    payload = {"device_type_id": device_type_id, "brand_id": brand_id, "model": "ThinkPad"}
+    payload.update(overrides)
+    return client.post(API, json=payload)
+
+
+def test_create_equipment_assigns_correlative_codes(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+
+    first = _post_equipment(client, device_type_id, brand_id)
+    second = _post_equipment(client, device_type_id, brand_id, model="IdeaPad")
+
+    assert first.status_code == 201
+    assert first.json()["internal_code"] == "EQ-000001"
+    assert second.status_code == 201
+    assert second.json()["internal_code"] == "EQ-000002"
+
+
+def test_create_equipment_without_serial_returns_null(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+
+    response = _post_equipment(client, device_type_id, brand_id)
+
+    assert response.status_code == 201
+    assert response.json()["serial_number"] is None
+
+
+def test_create_equipment_returns_nested_references_and_no_owner(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+
+    body = _post_equipment(client, device_type_id, brand_id, serial_number=" SN-1 ").json()
+
+    assert body["device_type"] == {"id": device_type_id, "name": "Laptop"}
+    assert body["brand"] == {"id": brand_id, "name": "HP"}
+    assert body["model"] == "ThinkPad"
+    assert body["serial_number"] == "SN-1"
+    assert body["current_owner"] is None
+    assert body["previous_services_count"] == 0
+    assert body["created_at"]
+
+
+@pytest.mark.parametrize("field", ["device_type_id", "brand_id"])
+def test_create_equipment_with_unknown_catalog_returns_422(
+    client, session: Session, field: str
+) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    payload = {"device_type_id": device_type_id, "brand_id": brand_id, "model": "ThinkPad"}
+    payload[field] = 9999
+
+    response = client.post(API, json=payload)
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "validation_error"
+    assert error["details"]["field"] == field
+    # El alta rechazada no consume correlativo ni deja equipos.
+    retried = _post_equipment(client, device_type_id, brand_id)
+    assert retried.json()["internal_code"] == "EQ-000001"
+    assert session.scalar(select(func.count()).select_from(Equipment)) == 1
+
+
+def test_create_equipment_with_inactive_catalog_returns_422(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    client.post(f"/api/v1/catalogs/device-types/{device_type_id}/deactivate")
+
+    response = _post_equipment(client, device_type_id, brand_id)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"]["field"] == "device_type_id"
+
+
+def test_create_equipment_rejects_a_blank_model(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+
+    response = _post_equipment(client, device_type_id, brand_id, model="   ")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"]["field"] == "model"
+
+
+def test_lookup_by_internal_code_and_by_serial_returns_the_same_equipment(
+    client, session: Session
+) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    created = _post_equipment(client, device_type_id, brand_id, serial_number="SN-1").json()
+
+    by_code = client.get(f"{API}/lookup", params={"internal_code": created["internal_code"]})
+    by_serial = client.get(f"{API}/lookup", params={"serial_number": "SN-1"})
+
+    assert by_code.status_code == 200
+    assert by_serial.status_code == 200
+    assert by_code.json()["id"] == created["id"]
+    assert by_serial.json()["id"] == created["id"]
+    assert by_code.json()["previous_services_count"] == 0
+    assert by_serial.json()["previous_services_count"] == 0
+
+
+def test_lookup_without_parameters_returns_422(client) -> None:
+    response = client.get(f"{API}/lookup")
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "validation_error"
+    assert error["details"]["field"] == "internal_code"
+
+
+def test_lookup_unknown_code_returns_404(client) -> None:
+    response = client.get(f"{API}/lookup", params={"internal_code": "EQ-999999"})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_lookup_unknown_serial_returns_404(client) -> None:
+    response = client.get(f"{API}/lookup", params={"serial_number": "SN-INEXISTENTE"})
+
+    assert response.status_code == 404
+
+
+def test_lookup_gives_precedence_to_the_internal_code(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    _post_equipment(client, device_type_id, brand_id, serial_number="SN-1")
+    second = _post_equipment(
+        client, device_type_id, brand_id, model="IdeaPad", serial_number="SN-2"
+    ).json()
+
+    response = client.get(
+        f"{API}/lookup",
+        params={"internal_code": second["internal_code"], "serial_number": "SN-1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == second["id"]
+
+
+def test_lookup_reports_previous_services_and_current_owner(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    equipment = _post_equipment(client, device_type_id, brand_id).json()
+    customer = Customer(name="Ana Pérez", phone="999111222")
+    session.add(customer)
+    session.flush()
+    for failure in ("No enciende", "Se apaga sola"):
+        session.add(
+            ServiceOrder(
+                equipment_id=equipment["id"],
+                customer_id=customer.id,
+                received_at=NOW,
+                reported_failure=failure,
+                physical_condition="Buen estado",
+                accessories="Ninguno",
+            )
+        )
+    session.flush()
+
+    response = client.get(f"{API}/lookup", params={"internal_code": equipment["internal_code"]})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["previous_services_count"] == 2
+    assert body["current_owner"] == {
+        "id": customer.id,
+        "name": "Ana Pérez",
+        "phone": "999111222",
+    }
