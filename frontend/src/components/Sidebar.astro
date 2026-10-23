@@ -19,7 +19,6 @@ const groups = [
     items: [
       { key: "reception", href: "/reception", label: "Nueva recepción", icon: "plusSquare" },
       { key: "services", href: "/services", label: "Bandeja de servicios", icon: "list" },
-      { key: "service-types", href: "/catalogs", label: "Tipos de servicio", icon: "tag" },
     ],
   },
   {
@@ -31,7 +30,10 @@ const groups = [
   },
   {
     label: "Configuración",
-    items: [{ key: "catalogs", href: "/catalogs", label: "Maestros", icon: "settings" }],
+    items: [
+      { key: "service-types", href: "/service-types", label: "Tipos de servicio", icon: "tag" },
+      { key: "catalogs", href: "/catalogs", label: "Maestros", icon: "settings" },
+    ],
   },
 ];
 ---

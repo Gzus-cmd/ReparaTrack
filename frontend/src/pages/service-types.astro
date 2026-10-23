@@ -1,0 +1,127 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeader from "../components/PageHeader.astro";
+import Callout from "../components/Callout.astro";
+import EmptyState from "../components/EmptyState.astro";
+import Icon from "../components/Icon.astro";
+import { serverFetch } from "../lib/server.js";
+
+const result = await serverFetch("/catalogs/operation-types");
+const values = result.ok ? result.data : [];
+---
+
+<Layout title="Tipos de servicio" description="Administrar los tipos de trabajo del taller." active="service-types">
+  <PageHeader
+    eyebrow="Configuración"
+    title="Tipos de servicio"
+    description="Los tipos de trabajo que registrás en cada servicio: mantenimiento, reparación, diagnóstico, formateo, etc. Los que están en uso no se borran, se desactivan."
+  />
+
+  {
+    !result.ok ? (
+      <Callout tone="danger" title="No se pudieron cargar los tipos de servicio">{result.error}</Callout>
+    ) : (
+      <section class="card">
+        <div class="card__header">
+          <h2 class="card__title">
+            <Icon name="tag" size={18} />
+            {values.length} {values.length === 1 ? "tipo" : "tipos"}
+          </h2>
+          <form class="row" data-add-form style="gap: 8px;">
+            <input class="input input--sm" name="name" placeholder="Nuevo tipo de servicio" required />
+            <button class="btn btn--primary btn--sm" type="submit">
+              <Icon name="plus" size={15} />
+              Agregar
+            </button>
+          </form>
+        </div>
+        <div class="card__body">
+          {values.length === 0 ? (
+            <EmptyState
+              icon="tag"
+              title="Sin tipos de servicio"
+              text="Agregá el primero (por ejemplo, 'Mantenimiento')."
+            />
+          ) : (
+            <ul class="plain-list">
+              {values.map((value) => (
+                <li class="catalog-row" data-id={value.id} data-name={value.name}>
+                  <span class="service-row__avatar" aria-hidden="true">
+                    <Icon name="tag" size={16} />
+                  </span>
+                  <span class:list={[!value.is_active && "muted"]}>
+                    {value.name}
+                    {!value.is_active && <span class="muted"> (inactivo)</span>}
+                  </span>
+                  {value.in_use && <span class="badge badge--neutral">en uso</span>}
+                  <span class="row" style="gap: 6px; margin-left: auto;">
+                    <button
+                      class="btn btn--ghost btn--sm"
+                      data-action={value.is_active ? "deactivate" : "activate"}
+                    >
+                      {value.is_active ? "Desactivar" : "Activar"}
+                    </button>
+                    {!value.in_use && (
+                      <button class="btn btn--ghost btn--sm" data-action="delete">Borrar</button>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+    )
+  }
+</Layout>
+
+<script>
+  import { apiFetch, postJson } from "../lib/api.js";
+  import { toast, confirmAction, setBusy } from "../lib/ui.js";
+
+  document.querySelector("[data-add-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const input = form.querySelector('input[name="name"]');
+    const name = input.value.trim();
+    const button = form.querySelector('button[type="submit"]');
+    if (!name) return;
+    setBusy(button, true, "Guardando…");
+    try {
+      await postJson("/catalogs/operation-types", { name });
+      toast("Tipo de servicio agregado.", { tone: "success" });
+      window.location.reload();
+    } catch (error) {
+      toast(error.message, { tone: "error" });
+      setBusy(button, false);
+    }
+  });
+
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const row = button.closest("[data-id]");
+      const id = row?.dataset.id;
+      const name = row?.dataset.name;
+      const action = button.dataset.action;
+      if (!id) return;
+      try {
+        if (action === "delete") {
+          const ok = await confirmAction({
+            title: `Borrar «${name}»`,
+            body: "Esta acción no se puede deshacer.",
+            danger: true,
+            confirmLabel: "Borrar",
+          });
+          if (!ok) return;
+          await apiFetch(`/catalogs/operation-types/${id}`, { method: "DELETE" });
+        } else {
+          await apiFetch(`/catalogs/operation-types/${id}/${action}`, { method: "POST" });
+        }
+        toast("Cambios guardados.", { tone: "success" });
+        window.location.reload();
+      } catch (error) {
+        toast(error.message, { tone: "error" });
+      }
+    });
+  });
+</script>

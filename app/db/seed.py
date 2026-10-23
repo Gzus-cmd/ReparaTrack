@@ -15,7 +15,7 @@ from app.db.models.catalog import Brand, Component, DeviceType, OperationType
 from app.db.normalization import normalize_name
 
 DEVICE_TYPE_NAMES = ("Laptop", "PC", "Impresora")
-BRAND_NAMES = ("HP", "Dell", "Lenovo", "Asus", "Acer", "Apple")
+BRAND_NAMES = ("HP", "Dell", "Lenovo", "Asus", "Acer", "Apple", "Epson", "Canon")
 COMPONENT_NAMES = (
     "RAM",
     "Disco",
