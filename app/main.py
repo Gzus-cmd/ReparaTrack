@@ -2,6 +2,7 @@
 
 Arranque: `py -m uvicorn app.main:app --reload`.
 """
+
 from __future__ import annotations
 
 from app.api.app import create_app
