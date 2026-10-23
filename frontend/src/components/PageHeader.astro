@@ -1,0 +1,21 @@
+---
+import Icon from "./Icon.astro";
+
+/**
+ * Encabezado de página con eyebrow, título, descripción y acciones.
+ */
+const { eyebrow = undefined, title, description = undefined } = Astro.props;
+---
+
+<header class="page-header">
+  <div class="page-header__text">
+    {eyebrow && <span class="page-eyebrow">{eyebrow}</span>}
+    <h1 class="page-header__title">{title}</h1>
+    {description && <p class="page-header__subtitle">{description}</p>}
+  </div>
+  {Astro.slots.has("actions") && (
+    <div class="page-header__actions">
+      <slot name="actions" />
+    </div>
+  )}
+</header>

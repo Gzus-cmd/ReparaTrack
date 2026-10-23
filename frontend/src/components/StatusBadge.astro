@@ -1,0 +1,26 @@
+---
+import { statusLabel } from "../lib/api.js";
+
+/**
+ * Badge de estado con el color propio de cada estado del servicio.
+ * `data-status` activa los tokens definidos en global.css.
+ */
+const {
+  status,
+  label,
+  size = "md",
+  solid = false,
+  dot = true,
+  class: className = "",
+} = Astro.props;
+
+const text = label || statusLabel(status);
+---
+
+<span
+  class:list={["badge", size === "lg" && "badge--lg", solid && "badge--solid", className]}
+  data-status={status}
+>
+  {dot && <span class="badge__dot" aria-hidden="true"></span>}
+  {text}
+</span>

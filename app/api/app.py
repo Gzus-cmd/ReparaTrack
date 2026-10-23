@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import Engine
 
 from app.api.errors import register_error_handlers
@@ -32,6 +33,12 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     app.state.settings = resolved_settings
     app.state.engine = resolved_engine
     app.state.session_factory = create_session_factory(resolved_engine)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:4321", "http://127.0.0.1:4321"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     register_error_handlers(app)
     app.include_router(api_router, prefix="/api/v1")
     app.include_router(web_router)

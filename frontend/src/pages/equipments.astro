@@ -1,0 +1,113 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeader from "../components/PageHeader.astro";
+import Callout from "../components/Callout.astro";
+import EmptyState from "../components/EmptyState.astro";
+import StatusBadge from "../components/StatusBadge.astro";
+import Icon from "../components/Icon.astro";
+import { serverFetch } from "../lib/server.js";
+import { formatDate } from "../lib/format.js";
+
+const url = Astro.url;
+const q = (url.searchParams.get("q") ?? "").trim();
+
+let equipment = null;
+let history = null;
+let lookupError = "";
+
+if (q) {
+  const lookup = await serverFetch(`/equipments/lookup?internal_code=${encodeURIComponent(q)}`);
+  if (lookup.ok) {
+    equipment = lookup.data;
+    const historyRes = await serverFetch(`/equipments/${equipment.id}/history?include=details,states`);
+    history = historyRes.ok ? historyRes.data : null;
+  } else {
+    lookupError = lookup.error;
+  }
+}
+
+const listRes = await serverFetch("/equipments");
+const all = listRes.ok ? (Array.isArray(listRes.data) ? listRes.data : listRes.data.items ?? []) : [];
+---
+
+<Layout title="Equipos" description="Buscar equipos por código o serial y ver su historial." active="equipments">
+  <PageHeader
+    eyebrow="Consultas"
+    title="Equipos"
+    description="Buscar por código interno (EQ-000001) o número de serie para reconocer un equipo y su historial técnico."
+  />
+
+  <form class="search-bar" method="get">
+    <Icon name="search" size={18} />
+    <input class="input" name="q" value={q} placeholder="Código interno o número de serie" aria-label="Buscar equipo" />
+    <button class="btn btn--primary" type="submit">Buscar</button>
+  </form>
+
+  {q && lookupError && (
+    <Callout tone="danger" title="Equipo no encontrado">{lookupError}</Callout>
+  )}
+
+  {equipment && (
+    <section class="card">
+      <div class="card__header">
+        <h2 class="card__title">{equipment.internal_code} · {equipment.model}</h2>
+        <span class="muted">{equipment.brand?.name} · {equipment.device_type?.name}</span>
+      </div>
+      <div class="card__body stack stack--sm">
+        <p style="margin:0;"><strong>Serial:</strong> {equipment.serial_number ?? "—"}</p>
+        <p style="margin:0;"><strong>Dueño actual:</strong> {equipment.current_owner?.name ?? "—"}</p>
+        <p style="margin:0;"><strong>Servicios previos:</strong> {equipment.previous_services_count}</p>
+      </div>
+    </section>
+  )}
+
+  {history && history.services?.length > 0 && (
+    <section class="card">
+      <div class="card__header">
+        <h2 class="card__title"><Icon name="list" size={18} /> Historial técnico</h2>
+      </div>
+      <ul class="service-list">
+        {history.services.map((service) => (
+          <li>
+            <a class="service-row" href={`/service/${service.id}`}>
+              <span class="service-row__identity">
+                <span class="service-row__code">#{service.id}</span>
+                <span class="service-row__sub">
+                  {formatDate(service.received_at)} · {service.reported_failure}
+                </span>
+              </span>
+              <span class="service-row__status">
+                <StatusBadge status={service.status} label={service.status_label} />
+              </span>
+              <span class="service-row__chevron" aria-hidden="true">
+                <Icon name="chevronRight" size={18} />
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {!q && (
+    <section class="card">
+      <div class="card__header">
+        <h2 class="card__title"><Icon name="monitor" size={18} /> Equipos registrados</h2>
+      </div>
+      {all.length === 0 ? (
+        <EmptyState title="Sin equipos" text="El primer equipo se crea al recepcionar un servicio." />
+      ) : (
+        <ul class="plain-list">
+          {all.map((item) => (
+            <li>
+              <a class="row row--between" href={`/equipments?q=${encodeURIComponent(item.internal_code)}`}>
+                <span><strong>{item.internal_code}</strong> · {item.model}</span>
+                <span class="muted">{item.brand?.name}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )}
+</Layout>

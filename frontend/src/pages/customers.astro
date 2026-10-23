@@ -1,0 +1,59 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeader from "../components/PageHeader.astro";
+import Callout from "../components/Callout.astro";
+import EmptyState from "../components/EmptyState.astro";
+import Icon from "../components/Icon.astro";
+import { serverFetch } from "../lib/server.js";
+import { initials } from "../lib/format.js";
+
+const url = Astro.url;
+const q = (url.searchParams.get("q") ?? "").trim();
+
+const result = await serverFetch(`/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+const items = result.ok ? (Array.isArray(result.data) ? result.data : result.data.items ?? []) : [];
+const total = result.ok ? (Array.isArray(result.data) ? result.data.length : result.data.total ?? items.length) : 0;
+---
+
+<Layout title="Clientes" description="Contactos registrados en el taller." active="customers">
+  <PageHeader
+    eyebrow="Consultas"
+    title="Clientes"
+    description="Contactos registrados. Buscar por nombre, teléfono o documento."
+  />
+
+  <form class="search-bar" method="get">
+    <Icon name="search" size={18} />
+    <input class="input" name="q" value={q} placeholder="Nombre, teléfono o documento" aria-label="Buscar cliente" />
+    <button class="btn btn--primary" type="submit">Buscar</button>
+  </form>
+
+  {!result.ok ? (
+    <Callout tone="danger" title="No se pudo cargar los clientes">{result.error}</Callout>
+  ) : (
+    <section class="card">
+      <div class="card__header">
+        <h2 class="card__title"><Icon name="users" size={18} /> {total} {total === 1 ? "cliente" : "clientes"}</h2>
+      </div>
+      {items.length === 0 ? (
+        <EmptyState title="Sin clientes" text="El primer cliente se crea al recepcionar un equipo." />
+      ) : (
+        <ul class="plain-list">
+          {items.map((customer) => (
+            <li class="customer-row">
+              <span class="service-row__avatar" aria-hidden="true">{initials(customer.name)}</span>
+              <span style="min-width: 0;">
+                <strong>{customer.name}</strong>
+                <span class="muted" style="display:block;">
+                  {customer.phone}
+                  {customer.email ? ` · ${customer.email}` : ""}
+                  {customer.document ? ` · ${customer.document}` : ""}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )}
+</Layout>

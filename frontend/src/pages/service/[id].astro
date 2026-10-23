@@ -1,0 +1,524 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import PageHeader from "../../components/PageHeader.astro";
+import StatusBadge from "../../components/StatusBadge.astro";
+import Timeline from "../../components/Timeline.astro";
+import Callout from "../../components/Callout.astro";
+import Icon from "../../components/Icon.astro";
+import { serverFetch } from "../../lib/server.js";
+import { ABANDONMENT_RULES, BLOCKED_REASONS, TERMINAL_STATUSES } from "../../lib/api.js";
+import { display, formatDate, formatDateTime, pluralDays, truncate } from "../../lib/format.js";
+
+const rawId = Astro.params.id ?? "";
+const id = Number(rawId);
+
+if (!Number.isInteger(id) || id <= 0) {
+  return Astro.redirect("/services");
+}
+
+const orderResult = await serverFetch(`/service-orders/${id}`);
+
+if (!orderResult.ok) {
+  Astro.response.status = orderResult.status === 404 ? 404 : 502;
+}
+
+const order = orderResult.ok ? orderResult.data : null;
+
+const [transitionsResult, historyResult, detailsResult, operationsResult, componentsResult] =
+  order
+    ? await Promise.all([
+        serverFetch(`/service-orders/${id}/transitions`),
+        serverFetch(`/service-orders/${id}/history`),
+        serverFetch(`/service-orders/${id}/details`),
+        serverFetch("/catalogs/operation-types"),
+        serverFetch("/catalogs/components"),
+      ])
+    : [null, null, null, null, null];
+
+const transitions = transitionsResult?.ok ? transitionsResult.data.allowed : [];
+const history = historyResult?.ok ? historyResult.data : [];
+const details = detailsResult?.ok ? detailsResult.data : [];
+const operations = operationsResult?.ok ? operationsResult.data : [];
+const components = componentsResult?.ok ? componentsResult.data : [];
+
+const isTerminal = order ? TERMINAL_STATUSES.includes(order.status) : true;
+
+const label = order?.status === "READY_FOR_PICKUP" ? "RN-07" : order?.status === "AWAITING_APPROVAL" ? "RN-10" : null;
+const rule = label ? ABANDONMENT_RULES[label] : null;
+const remaining = rule && order ? Math.max(0, rule.threshold - order.days_in_status) : null;
+
+const title = order ? `Servicio #${order.id}` : "Servicio no encontrado";
+---
+
+<Layout title={title} description="Ficha del servicio: estado, evidencia de recepción, operaciones e historial." active="services">
+  {
+    !order ? (
+      <div class="stack stack--lg">
+        <PageHeader
+          eyebrow="Servicios"
+          title="No pudimos abrir este servicio"
+          description={orderResult.error}
+        >
+          <a slot="actions" class="btn btn--primary" href="/services">
+            <Icon name="arrowLeft" size={17} />
+            Volver a la bandeja
+          </a>
+        </PageHeader>
+        <Callout tone="danger" title="Servicio no disponible">
+          {orderResult.status === 404
+            ? `No existe un servicio con el identificador #${rawId}.`
+            : orderResult.error}
+        </Callout>
+      </div>
+    ) : (
+      <div class="stack stack--lg">
+        <nav aria-label="Migas de pan" class="muted" style="font-size: var(--text-xs);">
+          <a href="/services">Servicios</a>
+          <span aria-hidden="true"> / </span>
+          <span aria-current="page">#{order.id}</span>
+        </nav>
+
+        <section class="service-hero" aria-labelledby="service-title">
+          <div class="service-hero__identity">
+            <span class="service-hero__code">{order.equipment.internal_code}</span>
+            <h1 class="service-hero__title" id="service-title">
+              {order.equipment.model}
+            </h1>
+            <p class="muted" style="margin: 0; font-size: var(--text-sm);">
+              Servicio #{order.id} · {order.customer.name} ·
+              <a href={`tel:${order.customer.phone}`}>{order.customer.phone}</a>
+            </p>
+            <div class="row" style="gap: var(--space-2);">
+              <StatusBadge status={order.status} label={order.status_label} size="lg" />
+              <span class="badge badge--neutral">
+                <Icon name="clock" size={13} />
+                {pluralDays(order.days_in_status)} en estado
+              </span>
+              <span class="badge badge--neutral">
+                <Icon name="calendar" size={13} />
+                {pluralDays(order.days_since_reception)} desde la recepción
+              </span>
+              {order.origin_service_id && (
+                <a class="badge badge--warning" href={`/service/${order.origin_service_id}`}>
+                  <Icon name="shield" size={13} />
+                  Reingreso de #{order.origin_service_id}
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div class="action-group">
+            <a class="btn btn--secondary" href={`/equipments/${encodeURIComponent(order.equipment.internal_code)}`}>
+              <Icon name="history" size={17} />
+              Historial del equipo
+            </a>
+            <a class="btn btn--secondary" href={`/customers/${order.customer.id}`}>
+              <Icon name="person" size={17} />
+              Ficha del cliente
+            </a>
+          </div>
+        </section>
+
+        {rule && (
+          <Callout tone={(remaining ?? 0) === 0 ? "warning" : "info"} title={`Regla de abandono ${label}`}>
+            {remaining === 0
+              ? `El servicio superó el umbral de ${pluralDays(rule.threshold)} en este estado y ya puede marcarse como abandonado (con confirmación).`
+              : `Faltan ${pluralDays(remaining)} para alcanzar el umbral de ${pluralDays(rule.threshold)} en este estado.`}
+          </Callout>
+        )}
+
+        <div class="detail-grid detail-grid--split">
+          <div class="stack stack--lg">
+            <section class="card" aria-labelledby="evidencia-title">
+              <div class="card__header">
+                <h2 class="card__title" id="evidencia-title">
+                  <Icon name="shield" size={18} />
+                  Evidencia de recepción
+                </h2>
+                <span class="badge badge--neutral">RN-08 · inmutable</span>
+              </div>
+              <div class="card__body stack">
+                <div class="detail-list">
+                  <div class="detail-item">
+                    <span class="detail-item__label">Recibido</span>
+                    <span class="detail-item__value">{formatDateTime(order.received_at)}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item__label">Entregado</span>
+                    <span class="detail-item__value">
+                      {order.delivered_at ? formatDateTime(order.delivered_at) : "Pendiente"}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item__label">Contraseña solicitada</span>
+                    <span class="detail-item__value">
+                      {order.password_requested ? "Sí (solo indicador)" : "No"}
+                    </span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-item__label">Operaciones registradas</span>
+                    <span class="detail-item__value">{order.details_count}</span>
+                  </div>
+                </div>
+
+                <hr class="divider" />
+
+                <div class="detail-item">
+                  <span class="detail-item__label">Falla reportada</span>
+                  <p class="prose-block">{order.reported_failure}</p>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-item__label">Accesorios recibidos</span>
+                  <p class="prose-block">{order.accessories}</p>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-item__label">Condición física</span>
+                  <p class="prose-block">{order.physical_condition}</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="operaciones-title">
+              <div class="card__header">
+                <h2 class="card__title" id="operaciones-title">
+                  <Icon name="wrench" size={18} />
+                  Operaciones
+                </h2>
+                <span class="badge badge--neutral">{details.length}</span>
+              </div>
+
+              {
+                details.length === 0 ? (
+                  <div class="card__body">
+                    <p class="muted" style="font-size: var(--text-sm); margin: 0;">
+                      Todavía no hay líneas de trabajo. Para pasar a «Listo para entrega» hace
+                      falta al menos una operación (RF-05).
+                    </p>
+                  </div>
+                ) : (
+                  <div class="table-wrap">
+                    <table class="table">
+                      <caption class="sr-only">Operaciones registradas en el servicio</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">Operación</th>
+                          <th scope="col">Componente</th>
+                          <th scope="col">Descripción</th>
+                          <th scope="col">Fecha</th>
+                          <th scope="col"><span class="sr-only">Acciones</span></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {details.map((detail) => (
+                          <tr>
+                            <td data-label="Operación">
+                              <strong class="strong">{detail.operation_type.name}</strong>
+                            </td>
+                            <td data-label="Componente">
+                              {detail.component ? detail.component.name : "—"}
+                            </td>
+                            <td data-label="Descripción">{truncate(detail.description, 80)}</td>
+                            <td data-label="Fecha" class="nowrap">
+                              {formatDate(detail.created_at)}
+                            </td>
+                            <td class="cell-actions" data-label="Acciones">
+                              {!isTerminal && (
+                                <button
+                                  type="button"
+                                  class="btn btn--sm btn--danger"
+                                  data-delete-detail={detail.id}
+                                  aria-label={`Eliminar la operación ${detail.operation_type.name}`}
+                                >
+                                  <Icon name="trash" size={15} />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              }
+
+              {!isTerminal && (
+                <div class="card__footer">
+                  <form id="detail-form" class="form-grid" style="align-items: end;">
+                    <div class="field">
+                      <label class="field__label" for="detail-operation">
+                        Operación <span class="req" aria-hidden="true">*</span>
+                      </label>
+                      <select class="select" id="detail-operation" required>
+                        <option value="">Seleccioná…</option>
+                        {operations.map((item) => (
+                          <option value={item.id}>{item.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="detail-component">Componente (opcional)</label>
+                      <select class="select" id="detail-component">
+                        <option value="">Sin componente</option>
+                        {components.map((item) => (
+                          <option value={item.id}>{item.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div class="field field--full">
+                      <label class="field__label" for="detail-description">
+                        Descripción del trabajo <span class="req" aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        class="input"
+                        id="detail-description"
+                        maxlength="500"
+                        placeholder="Ej.: se reemplazó el conector de carga y se probó el encendido."
+                        required
+                      />
+                    </div>
+                    <div class="field field--full row row--end">
+                      <button type="submit" class="btn btn--secondary" id="detail-submit">
+                        <Icon name="plus" size={16} />
+                        Agregar operación
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </section>
+          </div>
+
+          <div class="stack stack--lg">
+            <section class="card" aria-labelledby="transiciones-title">
+              <div class="card__header">
+                <h2 class="card__title" id="transiciones-title">
+                  <Icon name="arrowRight" size={18} />
+                  Cambiar de estado
+                </h2>
+                <StatusBadge status={order.status} label={order.status_label} />
+              </div>
+
+              <div class="card__body stack">
+                {isTerminal ? (
+                  <Callout tone="success" title="Ciclo cerrado">
+                    Este servicio está en un estado terminal. La bitácora queda como evidencia y no
+                    admite más transiciones.
+                  </Callout>
+                ) : transitions.length === 0 ? (
+                  <p class="muted" style="font-size: var(--text-sm); margin: 0;">
+                    La matriz de estados no ofrece destinos desde el estado actual.
+                  </p>
+                ) : (
+                  <>
+                    <div class="field">
+                      <label class="field__label" for="transition-comment">
+                        Comentario (opcional)
+                      </label>
+                      <textarea
+                        class="textarea"
+                        id="transition-comment"
+                        maxlength="500"
+                        placeholder="Motivo del cambio, respuesta del cliente, observación…"
+                      ></textarea>
+                    </div>
+
+                    <div class="stack stack--sm" id="transition-list">
+                      {transitions.map((option) => (
+                        <div>
+                          <button
+                            type="button"
+                            class:list={[
+                              "btn btn--block",
+                              option.blocked_reason
+                                ? "btn--secondary"
+                                : option.to_status === "ABANDONED"
+                                  ? "btn--danger"
+                                  : option.to_status === "READY_FOR_PICKUP" ||
+                                      option.to_status === "DELIVERED"
+                                    ? "btn--success"
+                                    : "btn--primary",
+                            ]}
+                            data-transition={option.to_status}
+                            data-confirm={option.to_status === "ABANDONED" ? "true" : undefined}
+                            disabled={Boolean(option.blocked_reason)}
+                          >
+                            Pasar a {option.status_label}
+                          </button>
+                          {option.blocked_reason && (
+                            <p class="field__hint" style="margin: 4px 0 0;">
+                              {BLOCKED_REASONS[option.blocked_reason] || option.blocked_reason}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div class="card__footer">
+                Solo aparecen los destinos de la matriz RN-05. Cada cambio queda en la bitácora.
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="historial-title">
+              <div class="card__header">
+                <h2 class="card__title" id="historial-title">
+                  <Icon name="history" size={18} />
+                  Historial de estados
+                </h2>
+                <span class="badge badge--neutral">{history.length}</span>
+              </div>
+              <div class="card__body">
+                <Timeline entries={history} />
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="ficha-title">
+              <div class="card__header">
+                <h2 class="card__title" id="ficha-title">
+                  <Icon name="box" size={18} />
+                  Equipo y cliente
+                </h2>
+              </div>
+              <div class="card__body stack">
+                <div class="detail-item">
+                  <span class="detail-item__label">Código interno</span>
+                  <span class="detail-item__value mono">
+                    <a href={`/equipments/${encodeURIComponent(order.equipment.internal_code)}`}>
+                      {order.equipment.internal_code}
+                    </a>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-item__label">Modelo</span>
+                  <span class="detail-item__value">{display(order.equipment.model)}</span>
+                </div>
+                <hr class="divider" />
+                <div class="detail-item">
+                  <span class="detail-item__label">Cliente</span>
+                  <span class="detail-item__value detail-item__value--lg">
+                    {order.customer.name}
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-item__label">Teléfono</span>
+                  <span class="detail-item__value">
+                    <a href={`tel:${order.customer.phone}`}>{order.customer.phone}</a>
+                  </span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-item__label">Servicio de origen</span>
+                  <span class="detail-item__value">
+                    {order.origin_service_id ? (
+                      <a href={`/service/${order.origin_service_id}`}>#{order.origin_service_id}</a>
+                    ) : (
+                      "Sin vínculo de garantía"
+                    )}
+                  </span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    )
+  }
+</Layout>
+
+{
+  order && (
+    <script define:vars={{ serviceId: order.id, isTerminal }}>
+      import { apiFetch, postJson } from "../../lib/api.js";
+      import { confirmAction, describeApiError, setBusy, toast } from "../../lib/ui.js";
+
+      const transitionButtons = document.querySelectorAll("[data-transition]");
+      const commentField = document.getElementById("transition-comment");
+
+      transitionButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+          const target = button.dataset.transition;
+          const needsConfirm = button.dataset.confirm === "true";
+
+          if (needsConfirm) {
+            const accepted = await confirmAction({
+              title: "Marcar el servicio como abandonado",
+              body: "Esta acción cierra el ciclo del servicio y queda registrada en la bitácora. Solo debería usarse cuando el cliente no respondió o no retiró el equipo dentro del umbral.",
+              confirmLabel: "Sí, marcar abandonado",
+              danger: true,
+            });
+            if (!accepted) return;
+          }
+
+          setBusy(button, true, "Aplicando…");
+
+          try {
+            await postJson(`/service-orders/${serviceId}/transitions`, {
+              to_status: target,
+              comment: commentField?.value.trim() || null,
+              confirm: needsConfirm,
+            });
+            toast("Estado actualizado. Recargando la ficha…", { tone: "success" });
+            window.location.reload();
+          } catch (error) {
+            setBusy(button, false);
+            toast(describeApiError(error), { tone: "error" });
+          }
+        });
+      });
+
+      const detailForm = document.getElementById("detail-form");
+
+      detailForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const operation = document.getElementById("detail-operation").value;
+        const description = document.getElementById("detail-description").value.trim();
+        const component = document.getElementById("detail-component").value;
+
+        if (!operation || !description) {
+          toast("Elegí una operación y escribí una descripción.", { tone: "error" });
+          return;
+        }
+
+        const submit = document.getElementById("detail-submit");
+        setBusy(submit, true, "Agregando…");
+
+        try {
+          await postJson(`/service-orders/${serviceId}/details`, {
+            operation_type_id: Number(operation),
+            component_id: component ? Number(component) : null,
+            description,
+          });
+          toast("Operación agregada.", { tone: "success" });
+          window.location.reload();
+        } catch (error) {
+          setBusy(submit, false);
+          toast(describeApiError(error), { tone: "error" });
+        }
+      });
+
+      document.querySelectorAll("[data-delete-detail]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const detailId = button.dataset.deleteDetail;
+          const accepted = await confirmAction({
+            title: "Eliminar esta operación",
+            body: "Se borra la línea de trabajo del servicio. La acción no se puede deshacer.",
+            confirmLabel: "Eliminar",
+            danger: true,
+          });
+          if (!accepted) return;
+
+          setBusy(button, true, "…");
+          try {
+            await apiFetch(`/service-orders/${serviceId}/details/${detailId}`, { method: "DELETE" });
+            toast("Operación eliminada.", { tone: "success" });
+            window.location.reload();
+          } catch (error) {
+            setBusy(button, false);
+            toast(describeApiError(error), { tone: "error" });
+          }
+        });
+      });
+    </script>
+  )
+}

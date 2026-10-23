@@ -1,0 +1,23 @@
+---
+import Icon from "./Icon.astro";
+
+/**
+ * Bloque de mensaje: info, warning, danger o success.
+ */
+const { tone = "info", title = undefined, icon = undefined, class: className = "" } = Astro.props;
+
+const ICONS = {
+  info: "alertCircle",
+  warning: "alert",
+  danger: "alert",
+  success: "checkCircle",
+};
+---
+
+<div class:list={["callout", `callout--${tone}`, className]} role={tone === "danger" ? "alert" : undefined}>
+  <Icon name={icon || ICONS[tone] || "alertCircle"} size={18} />
+  <div>
+    {title && <strong class="callout__title">{title}</strong>}
+    <slot />
+  </div>
+</div>
