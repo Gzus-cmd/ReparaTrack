@@ -9,11 +9,17 @@ const { active = "dashboard" } = Astro.props;
 
 const groups = [
   {
-    label: "Operación",
+    label: "Inicio",
     items: [
       { key: "dashboard", href: "/", label: "Tablero", icon: "dashboard" },
-      { key: "reception", href: "/reception", label: "Recepción", icon: "plusSquare" },
-      { key: "services", href: "/services", label: "Servicios", icon: "list" },
+    ],
+  },
+  {
+    label: "Servicios",
+    items: [
+      { key: "reception", href: "/reception", label: "Nueva recepción", icon: "plusSquare" },
+      { key: "services", href: "/services", label: "Bandeja de servicios", icon: "list" },
+      { key: "service-types", href: "/catalogs", label: "Tipos de servicio", icon: "tag" },
     ],
   },
   {

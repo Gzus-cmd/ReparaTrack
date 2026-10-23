@@ -1461,6 +1461,36 @@ fieldset {
   font-family: var(--font-sans);
 }
 
+/* El atributo [hidden] siempre gana (los display:flex/grid lo pisan). */
+[hidden] {
+  display: none !important;
+}
+
+/* Barra de búsqueda con icono integrado y botón con separación. */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 600px;
+  margin-bottom: var(--space-4);
+}
+.search-field {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.search-field svg {
+  position: absolute;
+  left: 12px;
+  color: var(--ink-400);
+  pointer-events: none;
+}
+.search-field .input {
+  width: 100%;
+  padding-left: 38px;
+}
+
 /* Radios tipo tarjeta (XOR cliente/equipo) */
 .segmented {
   display: inline-flex;

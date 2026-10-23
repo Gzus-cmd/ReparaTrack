@@ -23,8 +23,10 @@ const total = result.ok ? (Array.isArray(result.data) ? result.data.length : res
   />
 
   <form class="search-bar" method="get">
-    <Icon name="search" size={18} />
-    <input class="input" name="q" value={q} placeholder="Nombre, teléfono o documento" aria-label="Buscar cliente" />
+    <div class="search-field">
+      <Icon name="search" size={18} />
+      <input class="input" name="q" value={q} placeholder="Nombre, teléfono o documento" aria-label="Buscar cliente" />
+    </div>
     <button class="btn btn--primary" type="submit">Buscar</button>
   </form>
 

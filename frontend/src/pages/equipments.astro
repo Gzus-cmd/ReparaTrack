@@ -38,8 +38,10 @@ const all = listRes.ok ? (Array.isArray(listRes.data) ? listRes.data : listRes.d
   />
 
   <form class="search-bar" method="get">
-    <Icon name="search" size={18} />
-    <input class="input" name="q" value={q} placeholder="Código interno o número de serie" aria-label="Buscar equipo" />
+    <div class="search-field">
+      <Icon name="search" size={18} />
+      <input class="input" name="q" value={q} placeholder="Código interno o número de serie" aria-label="Buscar equipo" />
+    </div>
     <button class="btn btn--primary" type="submit">Buscar</button>
   </form>
 

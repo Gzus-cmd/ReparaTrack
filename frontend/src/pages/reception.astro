@@ -50,16 +50,6 @@ const catalogsError = !deviceTypesResult.ok || !brandsResult.ok;
           <span class="fieldset__step">1</span>
           Cliente
         </h2>
-        <div class="segmented" role="radiogroup" aria-label="Origen del cliente">
-          <label>
-            <input type="radio" name="customer-mode" value="existing" checked />
-            Existente
-          </label>
-          <label>
-            <input type="radio" name="customer-mode" value="new" />
-            Nuevo
-          </label>
-        </div>
       </div>
 
       <div class="card__body">
@@ -94,9 +84,22 @@ const catalogsError = !deviceTypesResult.ok || !brandsResult.ok;
           </div>
 
           <div id="customer-selected" class="callout callout--success" hidden></div>
+
+          <button type="button" class="btn btn--ghost btn--sm" data-action="show-new" data-mode="customer">
+            + Registrar un cliente nuevo
+          </button>
         </div>
 
         <div class="form-grid" data-customer-panel="new" hidden>
+          <button
+            type="button"
+            class="btn btn--ghost btn--sm"
+            style="grid-column: 1 / -1; justify-self: start;"
+            data-action="show-existing"
+            data-mode="customer"
+          >
+            ← Elegir cliente existente
+          </button>
           <div class="field">
             <label class="field__label" for="customer-name">
               Nombre <span class="req" aria-hidden="true">*</span>
@@ -146,16 +149,6 @@ const catalogsError = !deviceTypesResult.ok || !brandsResult.ok;
           <span class="fieldset__step">2</span>
           Equipo
         </h2>
-        <div class="segmented" role="radiogroup" aria-label="Origen del equipo">
-          <label>
-            <input type="radio" name="equipment-mode" value="existing" checked />
-            Existente
-          </label>
-          <label>
-            <input type="radio" name="equipment-mode" value="new" />
-            Nuevo
-          </label>
-        </div>
       </div>
 
       <div class="card__body">
@@ -184,9 +177,22 @@ const catalogsError = !deviceTypesResult.ok || !brandsResult.ok;
 
           <div id="equipment-feedback" aria-live="polite"></div>
           <div id="equipment-card" hidden></div>
+
+          <button type="button" class="btn btn--ghost btn--sm" data-action="show-new" data-mode="equipment">
+            + Registrar un equipo nuevo
+          </button>
         </div>
 
         <div class="form-grid" data-equipment-panel="new" hidden>
+          <button
+            type="button"
+            class="btn btn--ghost btn--sm"
+            style="grid-column: 1 / -1; justify-self: start;"
+            data-action="show-existing"
+            data-mode="equipment"
+          >
+            ← Buscar equipo existente
+          </button>
           <div class="field">
             <label class="field__label" for="device-type">
               Tipo de dispositivo <span class="req" aria-hidden="true">*</span>
@@ -632,12 +638,12 @@ const catalogsError = !deviceTypesResult.ok || !brandsResult.ok;
     }
   }
 
-  form.querySelectorAll('input[name="customer-mode"]').forEach((radio) => {
-    radio.addEventListener("change", () => setCustomerMode(radio.value));
-  });
-
-  form.querySelectorAll('input[name="equipment-mode"]').forEach((radio) => {
-    radio.addEventListener("change", () => setEquipmentMode(radio.value));
+  document.querySelectorAll("[data-action='show-new'], [data-action='show-existing']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.action === "show-new" ? "new" : "existing";
+      if (button.dataset.mode === "customer") setCustomerMode(target);
+      else setEquipmentMode(target);
+    });
   });
 
   /* ---------------------------- Contadores -------------------------------- */
