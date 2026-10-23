@@ -4,6 +4,7 @@ import PageHeader from "../components/PageHeader.astro";
 import Callout from "../components/Callout.astro";
 import EmptyState from "../components/EmptyState.astro";
 import StatusBadge from "../components/StatusBadge.astro";
+import StatCard from "../components/StatCard.astro";
 import Icon from "../components/Icon.astro";
 import { serverFetch } from "../lib/server.js";
 import { formatDate } from "../lib/format.js";
@@ -28,6 +29,15 @@ if (q) {
 
 const listRes = await serverFetch("/equipments");
 const all = listRes.ok ? (Array.isArray(listRes.data) ? listRes.data : listRes.data.items ?? []) : [];
+
+const countByType = (type) => all.filter((item) => item.device_type?.name === type).length;
+const stats = {
+  total: all.length,
+  portatiles: countByType("Laptop"),
+  escritorio: countByType("PC"),
+  impresoras: countByType("Impresora"),
+};
+const deviceIcon = (name) => (name === "Impresora" ? "box" : "monitor");
 ---
 
 <Layout title="Equipos" description="Buscar equipos por código o serial y ver su historial." active="equipments">
@@ -92,24 +102,51 @@ const all = listRes.ok ? (Array.isArray(listRes.data) ? listRes.data : listRes.d
   )}
 
   {!q && (
-    <section class="card">
-      <div class="card__header">
-        <h2 class="card__title"><Icon name="monitor" size={18} /> Equipos registrados</h2>
+    <>
+      <div class="stat-grid">
+        <StatCard label="Equipos registrados" value={stats.total} icon="monitor" tone="info" hint="Total en el taller" />
+        <StatCard label="Laptops" value={stats.portatiles} icon="monitor" tone="violet" hint="Equipos portátiles" />
+        <StatCard label="PC de escritorio" value={stats.escritorio} icon="box" tone="success" hint="Equipos de torre" />
+        <StatCard label="Impresoras" value={stats.impresoras} icon="box" tone="warning" hint="Equipos de impresión" />
       </div>
-      {all.length === 0 ? (
-        <EmptyState title="Sin equipos" text="El primer equipo se crea al recepcionar un servicio." />
-      ) : (
-        <ul class="plain-list">
-          {all.map((item) => (
-            <li>
-              <a class="row row--between" href={`/equipments?q=${encodeURIComponent(item.internal_code)}`}>
-                <span><strong>{item.internal_code}</strong> · {item.model}</span>
-                <span class="muted">{item.brand?.name}</span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+
+      <section class="card">
+        <div class="card__header">
+          <h2 class="card__title"><Icon name="monitor" size={18} /> Equipos registrados</h2>
+        </div>
+        {all.length === 0 ? (
+          <EmptyState title="Sin equipos" text="El primer equipo se crea al recepcionar un servicio." />
+        ) : (
+          <ul class="plain-list equipment-list">
+            {all.map((item) => (
+              <li>
+                <a class="equipment-row" href={`/equipments?q=${encodeURIComponent(item.internal_code)}`}>
+                  <span class="equipment-row__icon">
+                    <Icon name={deviceIcon(item.device_type?.name)} size={20} />
+                  </span>
+                  <span class="equipment-row__main">
+                    <span class="equipment-row__code">{item.internal_code}</span>
+                    <span class="equipment-row__model">{item.model}</span>
+                  </span>
+                  <span class="equipment-row__meta">
+                    <span class="badge badge--neutral">{item.device_type?.name}</span>
+                    <span class="badge badge--neutral">{item.brand?.name}</span>
+                    {item.current_owner && (
+                      <span class="equipment-row__owner">
+                        <Icon name="person" size={14} /> {item.current_owner.name}
+                      </span>
+                    )}
+                  </span>
+                  <span class="equipment-row__count">
+                    {item.previous_services_count} <span class="muted">serv.</span>
+                  </span>
+                  <span class="equipment-row__chevron"><Icon name="chevronRight" size={18} /></span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
   )}
 </Layout>

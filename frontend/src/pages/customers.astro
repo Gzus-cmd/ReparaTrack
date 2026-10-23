@@ -4,6 +4,7 @@ import PageHeader from "../components/PageHeader.astro";
 import Callout from "../components/Callout.astro";
 import EmptyState from "../components/EmptyState.astro";
 import Icon from "../components/Icon.astro";
+import StatCard from "../components/StatCard.astro";
 import { serverFetch } from "../lib/server.js";
 import { initials } from "../lib/format.js";
 
@@ -13,6 +14,8 @@ const q = (url.searchParams.get("q") ?? "").trim();
 const result = await serverFetch(`/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`);
 const items = result.ok ? (Array.isArray(result.data) ? result.data : result.data.items ?? []) : [];
 const total = result.ok ? (Array.isArray(result.data) ? result.data.length : result.data.total ?? items.length) : 0;
+const withEmail = items.filter((customer) => customer.email).length;
+const withDocument = items.filter((customer) => customer.document).length;
 ---
 
 <Layout title="Clientes" description="Contactos registrados en el taller." active="customers">
@@ -33,29 +36,41 @@ const total = result.ok ? (Array.isArray(result.data) ? result.data.length : res
   {!result.ok ? (
     <Callout tone="danger" title="No se pudo cargar los clientes">{result.error}</Callout>
   ) : (
-    <section class="card">
-      <div class="card__header">
-        <h2 class="card__title"><Icon name="users" size={18} /> {total} {total === 1 ? "cliente" : "clientes"}</h2>
+    <>
+      <div class="stat-grid">
+        <StatCard label="Clientes" value={total} icon="users" tone="info" hint="Contactos registrados" />
+        <StatCard label="Con email" value={withEmail} icon="external" tone="success" hint="Contacto digital" />
+        <StatCard label="Con documento" value={withDocument} icon="tag" tone="violet" hint="DNI / RUC" />
       </div>
-      {items.length === 0 ? (
-        <EmptyState title="Sin clientes" text="El primer cliente se crea al recepcionar un equipo." />
-      ) : (
-        <ul class="plain-list">
-          {items.map((customer) => (
-            <li class="customer-row">
-              <span class="service-row__avatar" aria-hidden="true">{initials(customer.name)}</span>
-              <span style="min-width: 0;">
-                <strong>{customer.name}</strong>
-                <span class="muted" style="display:block;">
-                  {customer.phone}
-                  {customer.email ? ` · ${customer.email}` : ""}
-                  {customer.document ? ` · ${customer.document}` : ""}
+
+      <section class="card">
+        <div class="card__header">
+          <h2 class="card__title"><Icon name="users" size={18} /> {total} {total === 1 ? "cliente" : "clientes"}</h2>
+        </div>
+        {items.length === 0 ? (
+          <EmptyState title="Sin clientes" text="El primer cliente se crea al recepcionar un equipo." />
+        ) : (
+          <ul class="plain-list customer-list">
+            {items.map((customer) => (
+              <li class="customer-row">
+                <span class="service-row__avatar" aria-hidden="true">{initials(customer.name)}</span>
+                <span class="customer-row__main">
+                  <strong class="customer-row__name">{customer.name}</strong>
+                  <span class="customer-row__meta">
+                    <span class="customer-chip"><Icon name="phone" size={13} /> {customer.phone}</span>
+                    {customer.email && (
+                      <span class="customer-chip"><Icon name="external" size={13} /> {customer.email}</span>
+                    )}
+                    {customer.document && (
+                      <span class="customer-chip"><Icon name="tag" size={13} /> {customer.document}</span>
+                    )}
+                  </span>
                 </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
   )}
 </Layout>

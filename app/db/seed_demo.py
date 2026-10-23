@@ -9,6 +9,7 @@ estados (RN-05), el correlativo de equipos (RN-02) y el mínimo de detalle
 Uso:
     py -m app.db.seed_demo          # resetea la base local y siembra los datos
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -27,7 +28,6 @@ from app.db.models.catalog import Brand, Component, DeviceType, OperationType
 from app.db.models.service_order import ServiceOrder
 from app.db.seed import seed_catalogs
 from app.db.session import create_engine_from_url, create_session_factory
-from app.services.ports import Clock
 
 # --------------------------------------------------------------------------- #
 # Datos realistas                                                             #
@@ -192,20 +192,163 @@ def seed_demo(session: Session) -> dict:
     work_battery = [WORK_OPERATIONS[3]]
     work_pad = [WORK_OPERATIONS[4]]
     work_keyboard = [WORK_OPERATIONS[5]]
+    work_printer = [("Mantenimiento", None, "Se limpió el cabezal y se calibró la impresora.")]
 
     scenarios = [
         (0, 0, FAILURES[0], CONDITIONS[0], "Cargador", [("RECEIVED", 90)] + FLOW, work_maintenance),
-        (1, 1, FAILURES[2], CONDITIONS[2], "Cargador y mouse", [("RECEIVED", 45)] + FLOW, work_format),
-        (2, 2, FAILURES[4], CONDITIONS[2], "Cable de poder", [("RECEIVED", 5), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("IN_REPAIR", 1)], work_change_disk),
-        (3, 3, FAILURES[1], CONDITIONS[1], "Cargador", [("RECEIVED", 6), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("IN_REPAIR", 1), ("READY_FOR_PICKUP", 1)], work_pad),
-        (4, 4, FAILURES[5], CONDITIONS[2], "Cargador", [("RECEIVED", 10), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1)], work_maintenance),
-        (5, 5, FAILURES[3], CONDITIONS[2], "Cable de poder", [("RECEIVED", 2), ("DIAGNOSING", 1), ("AWAITING_PART", 1)], work_battery),
-        (6, 6, FAILURES[6], CONDITIONS[3], "Cargador", [("RECEIVED", 1), ("DIAGNOSING", 1)], work_keyboard),
+        (
+            1,
+            1,
+            FAILURES[2],
+            CONDITIONS[2],
+            "Cargador y mouse",
+            [("RECEIVED", 45)] + FLOW,
+            work_format,
+        ),
+        (
+            2,
+            2,
+            FAILURES[4],
+            CONDITIONS[2],
+            "Cable de poder",
+            [("RECEIVED", 5), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("IN_REPAIR", 1)],
+            work_change_disk,
+        ),
+        (
+            3,
+            3,
+            FAILURES[1],
+            CONDITIONS[1],
+            "Cargador",
+            [
+                ("RECEIVED", 6),
+                ("DIAGNOSING", 1),
+                ("AWAITING_APPROVAL", 1),
+                ("IN_REPAIR", 1),
+                ("READY_FOR_PICKUP", 1),
+            ],
+            work_pad,
+        ),
+        (
+            4,
+            4,
+            FAILURES[5],
+            CONDITIONS[2],
+            "Cargador",
+            [("RECEIVED", 10), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1)],
+            work_maintenance,
+        ),
+        (
+            5,
+            5,
+            FAILURES[3],
+            CONDITIONS[2],
+            "Cable de poder",
+            [("RECEIVED", 2), ("DIAGNOSING", 1), ("AWAITING_PART", 1)],
+            work_battery,
+        ),
+        (
+            6,
+            6,
+            FAILURES[6],
+            CONDITIONS[3],
+            "Cargador",
+            [("RECEIVED", 1), ("DIAGNOSING", 1)],
+            work_keyboard,
+        ),
         (7, 7, FAILURES[7], CONDITIONS[2], "Sin cargador", [("RECEIVED", 0)], work_maintenance),
-        (8, 0, FAILURES[5], CONDITIONS[1], "Cargador", [("RECEIVED", 15), ("DIAGNOSING", 1), ("NOT_REPARABLE", 1), ("DELIVERED", 1)], work_maintenance),
-        (9, 1, FAILURES[2], CONDITIONS[2], "Cable de poder", [("RECEIVED", 7), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("REJECTED", 1), ("DELIVERED", 1)], work_format),
-        (4, 2, FAILURES[0], CONDITIONS[0], "Cargador", [("RECEIVED", 200), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("IN_REPAIR", 2), ("READY_FOR_PICKUP", 1), ("ABANDONED", 181)], work_change_disk),
-        (6, 3, FAILURES[6], CONDITIONS[3], "Cargador", [("RECEIVED", 40), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("ABANDONED", 31)], work_keyboard),
+        (
+            8,
+            0,
+            FAILURES[5],
+            CONDITIONS[1],
+            "Cargador",
+            [("RECEIVED", 15), ("DIAGNOSING", 1), ("NOT_REPARABLE", 1), ("DELIVERED", 1)],
+            work_maintenance,
+        ),
+        (
+            9,
+            1,
+            FAILURES[2],
+            CONDITIONS[2],
+            "Cable de poder",
+            [
+                ("RECEIVED", 7),
+                ("DIAGNOSING", 1),
+                ("AWAITING_APPROVAL", 1),
+                ("REJECTED", 1),
+                ("DELIVERED", 1),
+            ],
+            work_format,
+        ),
+        (
+            4,
+            2,
+            FAILURES[0],
+            CONDITIONS[0],
+            "Cargador",
+            [
+                ("RECEIVED", 200),
+                ("DIAGNOSING", 1),
+                ("AWAITING_APPROVAL", 1),
+                ("IN_REPAIR", 2),
+                ("READY_FOR_PICKUP", 1),
+                ("ABANDONED", 181),
+            ],
+            work_change_disk,
+        ),
+        (
+            6,
+            3,
+            FAILURES[6],
+            CONDITIONS[3],
+            "Cargador",
+            [("RECEIVED", 40), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("ABANDONED", 31)],
+            work_keyboard,
+        ),
+        # Casos extremos para demostración: terminales y fuera de umbral (RN-07 / RN-10).
+        (
+            9,
+            2,
+            FAILURES[0],
+            CONDITIONS[0],
+            "Cargador",
+            [("RECEIVED", 12), ("DIAGNOSING", 1), ("NOT_REPARABLE", 1)],
+            work_maintenance,
+        ),
+        (
+            8,
+            5,
+            FAILURES[3],
+            CONDITIONS[2],
+            "Cable de poder",
+            [("RECEIVED", 20), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1), ("REJECTED", 1)],
+            work_format,
+        ),
+        (
+            5,
+            6,
+            FAILURES[3],
+            CONDITIONS[2],
+            "Cable de poder",
+            [
+                ("RECEIVED", 200),
+                ("DIAGNOSING", 1),
+                ("AWAITING_APPROVAL", 1),
+                ("IN_REPAIR", 2),
+                ("READY_FOR_PICKUP", 1),
+            ],
+            work_printer,
+        ),
+        (
+            3,
+            4,
+            FAILURES[1],
+            CONDITIONS[1],
+            "Cargador",
+            [("RECEIVED", 40), ("DIAGNOSING", 1), ("AWAITING_APPROVAL", 1)],
+            work_pad,
+        ),
     ]
 
     for scenario in scenarios:
@@ -246,9 +389,16 @@ def seed_demo(session: Session) -> dict:
     by_status = {
         status: session.query(ServiceOrder).filter_by(status=status).count()
         for status in (
-            "RECEIVED", "DIAGNOSING", "AWAITING_APPROVAL", "AWAITING_PART",
-            "IN_REPAIR", "NOT_REPARABLE", "REJECTED", "READY_FOR_PICKUP",
-            "DELIVERED", "ABANDONED",
+            "RECEIVED",
+            "DIAGNOSING",
+            "AWAITING_APPROVAL",
+            "AWAITING_PART",
+            "IN_REPAIR",
+            "NOT_REPARABLE",
+            "REJECTED",
+            "READY_FOR_PICKUP",
+            "DELIVERED",
+            "ABANDONED",
         )
     }
 
