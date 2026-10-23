@@ -6,8 +6,11 @@ import Icon from "../components/Icon.astro";
 import { serverFetch } from "../lib/server.js";
 import { CATALOGS } from "../lib/api.js";
 
-const results = await Promise.all(CATALOGS.map((catalog) => serverFetch(`/catalogs/${catalog.slug}`)));
-const catalogs = CATALOGS.map((catalog, index) => ({
+const managementCatalogs = CATALOGS.filter((catalog) => catalog.slug !== "operation-types");
+const results = await Promise.all(
+  managementCatalogs.map((catalog) => serverFetch(`/catalogs/${catalog.slug}`)),
+);
+const catalogs = managementCatalogs.map((catalog, index) => ({
   ...catalog,
   ok: results[index].ok,
   error: results[index].error,
@@ -20,7 +23,7 @@ const apiDown = catalogs.every((catalog) => !catalog.ok);
   <PageHeader
     eyebrow="Configuración"
     title="Maestros"
-    description="Tipos de dispositivo, marcas, componentes y operaciones. Los valores en uso no se borran: se desactivan."
+    description="Tipos de dispositivo, marcas y componentes. Los tipos de servicio se administran en su página propia."
   />
 
   {
