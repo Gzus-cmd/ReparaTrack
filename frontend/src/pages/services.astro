@@ -1,0 +1,82 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeader from "../components/PageHeader.astro";
+import ServiceList from "../components/ServiceList.astro";
+import Callout from "../components/Callout.astro";
+import Icon from "../components/Icon.astro";
+import { serverFetch } from "../lib/server.js";
+import { STATUSES, statusLabel } from "../lib/api.js";
+
+const url = Astro.url;
+const status = url.searchParams.get("status");
+const result = await serverFetch(`/service-orders${status ? `?status=${status}` : ""}`);
+
+const items = result.ok ? (Array.isArray(result.data) ? result.data : result.data.items ?? []) : [];
+const total = result.ok ? (Array.isArray(result.data) ? result.data.length : result.data.total ?? items.length) : 0;
+
+const services = items.map((s) => ({
+  id: s.id,
+  code: s.equipment?.internal_code ?? `#${s.id}`,
+  customer: s.customer?.name ?? "—",
+  deviceType: s.equipment?.model ?? "",
+  status: s.status,
+  statusLabel: s.status_label,
+  receivedAt: s.received_at,
+  daysInStatus: s.days_in_status,
+  detailsCount: s.details_count,
+  alertRule: null,
+}));
+
+const chips = [{ key: null, label: "Todos", count: total }].concat(
+  STATUSES.map((st) => ({ key: st.key, label: st.label, count: null })),
+);
+---
+
+<Layout title="Servicios" description="Bandeja completa de servicios del taller." active="services">
+  <PageHeader
+    eyebrow="Servicios"
+    title="Bandeja de servicios"
+    description="Todos los servicios, incluidos los entregados y abandonados. Tocá uno para ver su ficha."
+  >
+    <a slot="actions" class="btn btn--primary" href="/reception">
+      <Icon name="plus" size={17} />
+      Nueva recepción
+    </a>
+  </PageHeader>
+
+  {
+    !result.ok ? (
+      <Callout tone="danger" title="No se pudo cargar la bandeja">{result.error}</Callout>
+    ) : (
+      <section class="card">
+        <div class="card__header">
+          <h2 class="card__title">
+            <Icon name="list" size={18} />
+            {total} {total === 1 ? "servicio" : "servicios"}
+          </h2>
+          {status && (
+            <span class="muted" style="font-size: var(--text-xs);">
+              Filtro: {statusLabel(status)}
+            </span>
+          )}
+        </div>
+        <div style="padding: 12px 20px; border-bottom: 1px solid var(--border);">
+          <div class="chips" aria-label="Filtrar por estado">
+            {chips.map((chip) => (
+              <a
+                class="chip"
+                href={chip.key ? `/services?status=${chip.key}` : "/services"}
+                aria-current={status === chip.key ? "page" : undefined}
+              >
+                {chip.key && <span class="status-dot" data-status={chip.key} />}
+                {chip.label}
+                {chip.count !== null && <span class="tab__count">{chip.count}</span>}
+              </a>
+            ))}
+          </div>
+        </div>
+        <ServiceList services={services} emptyTitle="No hay servicios" emptyText="Recepcioná un equipo para empezar." />
+      </section>
+    )
+  }
+</Layout>

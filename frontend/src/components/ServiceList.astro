@@ -1,0 +1,82 @@
+---
+import Icon from "./Icon.astro";
+import StatusBadge from "./StatusBadge.astro";
+import { formatDate, initials, pluralDays } from "../lib/format.js";
+
+/**
+ * Lista de servicios del taller.
+ *
+ * Cada fila se normaliza fuera del componente para que la misma vista sirva al
+ * tablero (`/dashboard/workbench`) y a la bandeja de servicios (`/service-orders`).
+ *
+ * Forma esperada de `service`:
+ * { id, code, customer, deviceType, status, statusLabel, receivedAt,
+ *   daysSince, daysInStatus, alertRule, detailsCount }
+ */
+const {
+  services = [],
+  emptyTitle = "No hay equipos en taller",
+  emptyText = "Cuando recepciones un equipo va a aparecer acá.",
+} = Astro.props;
+---
+
+{
+  services.length === 0 ? (
+    <div class="service-list__empty">
+      <p class="empty__title">{emptyTitle}</p>
+      <p class="empty__text" style="margin: 6px auto 0;">{emptyText}</p>
+      {Astro.slots.has("empty-action") && <div style="margin-top: 16px;"><slot name="empty-action" /></div>}
+    </div>
+  ) : (
+    <ul class="service-list">
+      {services.map((service) => (
+        <li>
+          <a
+            class="service-row"
+            href={`/service/${service.id}`}
+            aria-label={`Abrir servicio ${service.id} de ${service.customer}`}
+          >
+            <span class="service-row__identity">
+              <span class="service-row__avatar" aria-hidden="true">
+                {initials(service.customer)}
+              </span>
+              <span style="min-width: 0;">
+                <span class="service-row__code">{service.code}</span>
+                <span class="service-row__sub">
+                  {service.customer}
+                  {service.deviceType ? ` · ${service.deviceType}` : ""}
+                </span>
+              </span>
+            </span>
+
+            <span class="service-row__timing">
+              <span>
+                Recibido <strong>{formatDate(service.receivedAt)}</strong>
+              </span>
+              <span>
+                En estado <strong>{pluralDays(service.daysInStatus)}</strong>
+                {service.detailsCount !== undefined && (
+                  <span> · {service.detailsCount} operaciones</span>
+                )}
+              </span>
+            </span>
+
+            <span class="service-row__status">
+              <StatusBadge status={service.status} label={service.statusLabel} />
+              {service.alertRule && (
+                <span class="service-row__alert" title={`Regla ${service.alertRule} superada`}>
+                  <Icon name="alert" size={13} />
+                  {service.alertRule} · fuera de umbral
+                </span>
+              )}
+            </span>
+
+            <span class="service-row__chevron" aria-hidden="true">
+              <Icon name="chevronRight" size={18} />
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}

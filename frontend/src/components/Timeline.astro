@@ -1,0 +1,42 @@
+---
+import { formatDateTime, isoDate } from "../lib/format.js";
+import { statusLabel } from "../lib/api.js";
+
+/**
+ * Bitácora vertical de cambios de estado. Se muestra del cambio más reciente
+ * al más antiguo, que es el orden útil en el mostrador del taller.
+ */
+const { entries = [], emptyText = "Todavía no hay movimientos registrados." } = Astro.props;
+
+const ordered = [...entries].reverse();
+---
+
+{
+  ordered.length === 0 ? (
+    <p class="muted" style="font-size: var(--text-sm); margin: 0;">
+      {emptyText}
+    </p>
+  ) : (
+    <ol class="timeline">
+      {ordered.map((entry, index) => (
+        <li class="timeline__item" data-status={entry.status}>
+          <span class="timeline__rail" aria-hidden="true">
+            <span class="timeline__dot" />
+          </span>
+          <div class="timeline__body">
+            <div class="timeline__head">
+              <span class="timeline__status">
+                {entry.status_label || statusLabel(entry.status)}
+              </span>
+              {index === 0 && <span class="badge badge--neutral timeline__badge">Actual</span>}
+            </div>
+            <time class="timeline__time" datetime={isoDate(entry.changed_at)}>
+              {formatDateTime(entry.changed_at)}
+            </time>
+            {entry.comment && <p class="timeline__comment">{entry.comment}</p>}
+          </div>
+        </li>
+      ))}
+    </ol>
+  )
+}

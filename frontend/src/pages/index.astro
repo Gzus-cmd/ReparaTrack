@@ -1,0 +1,252 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeader from "../components/PageHeader.astro";
+import StatCard from "../components/StatCard.astro";
+import ServiceList from "../components/ServiceList.astro";
+import Callout from "../components/Callout.astro";
+import Icon from "../components/Icon.astro";
+import { serverFetch } from "../lib/server.js";
+import { ACTIVE_STATUSES, STATUSES, statusLabel } from "../lib/api.js";
+import { formatDateLong, pluralDays } from "../lib/format.js";
+
+const url = Astro.url;
+const requestedStatus = url.searchParams.get("status");
+const statusFilter = ACTIVE_STATUSES.includes(requestedStatus ?? "") ? requestedStatus : null;
+
+const [workbenchResult, summaryResult] = await Promise.all([
+  serverFetch(`/dashboard/workbench${statusFilter ? `?status=${statusFilter}` : ""}`),
+  serverFetch("/dashboard/summary"),
+]);
+
+const apiDown = !workbenchResult.ok && !summaryResult.ok;
+const apiMessage = workbenchResult.ok ? summaryResult.error : workbenchResult.error;
+
+const items = workbenchResult.ok ? workbenchResult.data.items : [];
+const byStatus = summaryResult.ok ? summaryResult.data.by_status : {};
+const alerts = summaryResult.ok ? summaryResult.data.alerts : {};
+
+const inWorkshop = ACTIVE_STATUSES.reduce((total, key) => total + (byStatus[key] ?? 0), 0);
+const alertTotal = Object.values(alerts).reduce((total, group) => total + (group.count ?? 0), 0);
+
+const services = items.map((item) => ({
+  id: item.service_order_id,
+  code: item.equipment_internal_code,
+  customer: item.customer_name,
+  deviceType: item.device_type,
+  status: item.status,
+  statusLabel: item.status_label,
+  receivedAt: item.received_at,
+  daysSince: item.days_since_reception,
+  daysInStatus: item.days_in_status,
+  alertRule: item.is_over_threshold ? item.threshold_rule : null,
+}));
+
+const statusTiles = STATUSES.map((status) => ({
+  ...status,
+  count: byStatus[status.key] ?? 0,
+}));
+
+const filterChips = [
+  { key: null, label: "Todos", count: inWorkshop },
+  ...STATUSES.filter((status) => ACTIVE_STATUSES.includes(status.key)).map((status) => ({
+    key: status.key,
+    label: status.label,
+    count: byStatus[status.key] ?? 0,
+  })),
+];
+
+const alertGroups = Object.values(alerts);
+const today = new Date();
+---
+
+<Layout title="Tablero" description="Equipos en taller, conteos por estado y alertas de umbral.">
+  <PageHeader
+    eyebrow="Tablero"
+    title="Equipos en taller"
+    description={`Vista operativa del taller al ${formatDateLong(today)}. Los datos se leen en vivo desde la API.`}
+  >
+    <a slot="actions" class="btn btn--secondary" href="/">
+      <Icon name="refresh" size={17} />
+      Actualizar
+    </a>
+    <a slot="actions" class="btn btn--primary" href="/reception">
+      <Icon name="plus" size={17} />
+      Nueva recepción
+    </a>
+  </PageHeader>
+
+  {
+    apiDown ? (
+      <Callout tone="danger" title="No se pudo cargar el tablero">
+        {apiMessage}
+      </Callout>
+    ) : (
+      !workbenchResult.ok && (
+        <Callout tone="warning" title="Listado no disponible">
+          Se pudieron leer los conteos, pero no el listado de equipos: {workbenchResult.error}
+        </Callout>
+      )
+    )
+  }
+
+  <section class="stat-grid" aria-label="Resumen del taller">
+    <StatCard
+      label="En taller"
+      value={inWorkshop}
+      hint="Equipos sin entregar"
+      icon="wrench"
+      tone="info"
+    />
+    <StatCard
+      label="Listo para entrega"
+      value={byStatus.READY_FOR_PICKUP ?? 0}
+      hint="Esperando que el cliente retire"
+      icon="checkCircle"
+      tone="success"
+    />
+    <StatCard
+      label="En reparación"
+      value={byStatus.IN_REPAIR ?? 0}
+      hint={`${byStatus.DIAGNOSING ?? 0} en diagnóstico`}
+      icon="settings"
+      tone="violet"
+    />
+    <StatCard
+      label="Fuera de umbral"
+      value={alertTotal}
+      hint="Reglas RN-07 y RN-10"
+      icon="alert"
+      tone="danger"
+      href="#alertas"
+    />
+  </section>
+
+  <div class="detail-grid detail-grid--split">
+    <section class="card" id="taller" aria-labelledby="taller-title">
+      <div class="card__header">
+        <h2 class="card__title" id="taller-title">
+          <Icon name="list" size={18} />
+          {statusFilter ? statusLabel(statusFilter) : "Todos los servicios abiertos"}
+        </h2>
+        <span class="muted" style="font-size: var(--text-xs);">
+          {services.length} {services.length === 1 ? "equipo" : "equipos"} · ordenados por antigüedad
+        </span>
+      </div>
+
+      <div style="padding: 12px 20px; border-bottom: 1px solid var(--border);">
+        <div class="chips" aria-label="Filtrar por estado">
+          {
+            filterChips.map((chip) => (
+              <a
+                class="chip"
+                href={chip.key ? `/?status=${chip.key}#taller` : "/#taller"}
+                aria-current={statusFilter === chip.key ? "page" : undefined}
+              >
+                {chip.key && <span class="status-dot" data-status={chip.key} />}
+                {chip.label}
+                <span class="tab__count">{chip.count}</span>
+              </a>
+            ))
+          }
+        </div>
+      </div>
+
+      <ServiceList services={services} emptyTitle="No hay equipos en este estado">
+        <Fragment slot="empty-action">
+          <a class="btn btn--secondary btn--sm" href="/reception">Recepcionar un equipo</a>
+        </Fragment>
+      </ServiceList>
+    </section>
+
+    <div class="stack">
+      <section class="card" aria-labelledby="dist-title">
+        <div class="card__header">
+          <h2 class="card__title" id="dist-title">
+            <Icon name="filter" size={18} />
+            Distribución por estado
+          </h2>
+        </div>
+        <div class="card__body">
+          <div class="status-grid">
+            {
+              statusTiles.map((status) => (
+                <a
+                  class="status-tile"
+                  data-status={status.key}
+                  href={
+                    ACTIVE_STATUSES.includes(status.key)
+                      ? `/?status=${status.key}#taller`
+                      : `/services?status=${status.key}`
+                  }
+                >
+                  <span class="status-tile__dot" aria-hidden="true" />
+                  <span class="status-tile__name">{status.label}</span>
+                  <span class="status-tile__count">{status.count}</span>
+                </a>
+              ))
+            }
+          </div>
+        </div>
+        <div class="card__footer">
+          Los estados terminales (Entregado y Abandonado) se consultan desde
+          <a href="/services">Servicios</a>.
+        </div>
+      </section>
+
+      <section class="card" id="alertas" aria-labelledby="alertas-title">
+        <div class="card__header">
+          <h2 class="card__title" id="alertas-title">
+            <Icon name="alert" size={18} />
+            Alertas de abandono
+          </h2>
+          <span class="badge badge--danger">{alertTotal}</span>
+        </div>
+        <div class="card__body stack stack--sm">
+          {
+            alertGroups.length === 0 && (
+              <p class="muted" style="font-size: var(--text-sm); margin: 0;">
+                Todavía no hay reglas configuradas.
+              </p>
+            )
+          }
+          {
+            alertGroups.map((group) => (
+              <article
+                class:list={["callout", group.count > 0 ? "callout--warning" : "callout--success"]}
+                style="flex-direction: column;"
+              >
+                <div class="row row--between" style="width: 100%;">
+                  <strong style="font-size: var(--text-sm);">{group.rule}</strong>
+                  <span class="badge badge--neutral">{pluralDays(group.threshold_days)}</span>
+                </div>
+                {group.count > 0 ? (
+                  <>
+                    <p style="margin: 0; font-size: var(--text-sm);">
+                      {group.count} {group.count === 1 ? "servicio supera" : "servicios superan"} el
+                      umbral y {group.count === 1 ? "puede" : "pueden"} marcarse como abandonado.
+                    </p>
+                    <div class="row" style="gap: 6px;">
+                      {group.service_order_ids.slice(0, 4).map((id) => (
+                        <a class="chip" href={`/service/${id}`}>#{id}</a>
+                      ))}
+                      {group.service_order_ids.length > 4 && (
+                        <span class="muted" style="font-size: var(--text-xs);">
+                          +{group.service_order_ids.length - 4} más
+                        </span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p style="margin: 0; font-size: var(--text-sm);">Sin casos fuera de umbral.</p>
+                )}
+              </article>
+            ))
+          }
+        </div>
+        <div class="card__footer">
+          <a href="/services">Ver bandeja completa de servicios</a>
+        </div>
+      </section>
+    </div>
+  </div>
+</Layout>

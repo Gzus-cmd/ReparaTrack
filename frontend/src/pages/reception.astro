@@ -1,0 +1,768 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PageHeader from "../components/PageHeader.astro";
+import Callout from "../components/Callout.astro";
+import Icon from "../components/Icon.astro";
+import { serverFetch } from "../lib/server.js";
+
+const [deviceTypesResult, brandsResult] = await Promise.all([
+  serverFetch("/catalogs/device-types"),
+  serverFetch("/catalogs/brands"),
+]);
+
+const deviceTypes = deviceTypesResult.ok ? deviceTypesResult.data : [];
+const brands = brandsResult.ok ? brandsResult.data : [];
+const catalogsError = !deviceTypesResult.ok || !brandsResult.ok;
+---
+
+<Layout
+  title="Recepción"
+  description="Registro de recepción de un equipo: cliente, equipo, falla, accesorios y condición física."
+  active="reception"
+>
+  <PageHeader
+    eyebrow="Recepción"
+    title="Recepción de un equipo"
+    description="Cinco datos obligatorios: cliente, equipo, falla reportada, accesorios y condición física. La evidencia de recepción queda registrada y no se edita después."
+  >
+    <a slot="actions" class="btn btn--ghost" href="/">
+      <Icon name="arrowLeft" size={17} />
+      Volver al tablero
+    </a>
+  </PageHeader>
+
+  {
+    catalogsError && (
+      <Callout tone="danger" title="Maestros no disponibles">
+        No se pudieron cargar los tipos de dispositivo o las marcas. Verificá que la API esté
+        corriendo antes de recepcionar un equipo nuevo.
+      </Callout>
+    )
+  }
+
+  <form id="reception-form" class="stack stack--lg" novalidate>
+    <div id="form-error" class="callout callout--danger" role="alert" hidden></div>
+
+    <!-- 1. Cliente -->
+    <section class="card" aria-labelledby="paso-cliente">
+      <div class="card__header">
+        <h2 class="card__title" id="paso-cliente">
+          <span class="fieldset__step">1</span>
+          Cliente
+        </h2>
+        <div class="segmented" role="radiogroup" aria-label="Origen del cliente">
+          <label>
+            <input type="radio" name="customer-mode" value="existing" checked />
+            Existente
+          </label>
+          <label>
+            <input type="radio" name="customer-mode" value="new" />
+            Nuevo
+          </label>
+        </div>
+      </div>
+
+      <div class="card__body">
+        <div class="stack" data-customer-panel="existing">
+          <div class="field">
+            <label class="field__label" for="customer-search">Buscar cliente</label>
+            <div class="input-group">
+              <input
+                class="input"
+                id="customer-search"
+                type="search"
+                placeholder="Nombre, teléfono o documento"
+                autocomplete="off"
+              />
+              <button type="button" class="btn btn--secondary" id="customer-search-btn">
+                <Icon name="search" size={17} />
+                Buscar
+              </button>
+            </div>
+            <span class="field__hint">
+              Escribí al menos dos caracteres y elegí el cliente correcto de la lista.
+            </span>
+          </div>
+
+          <div
+            id="customer-results"
+            class="pick-list"
+            role="group"
+            aria-label="Resultados de la búsqueda de clientes"
+            aria-live="polite"
+          >
+          </div>
+
+          <div id="customer-selected" class="callout callout--success" hidden></div>
+        </div>
+
+        <div class="form-grid" data-customer-panel="new" hidden>
+          <div class="field">
+            <label class="field__label" for="customer-name">
+              Nombre <span class="req" aria-hidden="true">*</span>
+            </label>
+            <input class="input" id="customer-name" name="customer_name" maxlength="120" required />
+          </div>
+          <div class="field">
+            <label class="field__label" for="customer-phone">
+              Teléfono <span class="req" aria-hidden="true">*</span>
+            </label>
+            <input
+              class="input"
+              id="customer-phone"
+              name="customer_phone"
+              type="tel"
+              maxlength="30"
+              required
+            />
+          </div>
+          <div class="field">
+            <label class="field__label" for="customer-email">Correo electrónico</label>
+            <input
+              class="input"
+              id="customer-email"
+              name="customer_email"
+              type="email"
+              maxlength="120"
+            />
+          </div>
+          <div class="field">
+            <label class="field__label" for="customer-document">Documento</label>
+            <input
+              class="input"
+              id="customer-document"
+              name="customer_document"
+              maxlength="20"
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Equipo -->
+    <section class="card" aria-labelledby="paso-equipo">
+      <div class="card__header">
+        <h2 class="card__title" id="paso-equipo">
+          <span class="fieldset__step">2</span>
+          Equipo
+        </h2>
+        <div class="segmented" role="radiogroup" aria-label="Origen del equipo">
+          <label>
+            <input type="radio" name="equipment-mode" value="existing" checked />
+            Existente
+          </label>
+          <label>
+            <input type="radio" name="equipment-mode" value="new" />
+            Nuevo
+          </label>
+        </div>
+      </div>
+
+      <div class="card__body">
+        <div class="stack" data-equipment-panel="existing">
+          <div class="field">
+            <label class="field__label" for="equipment-lookup">
+              Código interno o número de serie
+            </label>
+            <div class="input-group">
+              <input
+                class="input"
+                id="equipment-lookup"
+                type="search"
+                placeholder="EQ-000123 o SN-123456"
+                autocomplete="off"
+              />
+              <button type="button" class="btn btn--secondary" id="equipment-lookup-btn">
+                <Icon name="search" size={17} />
+                Buscar equipo
+              </button>
+            </div>
+            <span class="field__hint">
+              El código interno tiene prioridad; si no existe, se busca por número de serie.
+            </span>
+          </div>
+
+          <div id="equipment-feedback" aria-live="polite"></div>
+          <div id="equipment-card" hidden></div>
+        </div>
+
+        <div class="form-grid" data-equipment-panel="new" hidden>
+          <div class="field">
+            <label class="field__label" for="device-type">
+              Tipo de dispositivo <span class="req" aria-hidden="true">*</span>
+            </label>
+            <select class="select" id="device-type" name="device_type_id" required>
+              <option value="">Seleccioná un tipo…</option>
+              {
+                deviceTypes.map((item) => (
+                  <option value={item.id}>{item.name}</option>
+                ))
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label class="field__label" for="brand">
+              Marca <span class="req" aria-hidden="true">*</span>
+            </label>
+            <select class="select" id="brand" name="brand_id" required>
+              <option value="">Seleccioná una marca…</option>
+              {
+                brands.map((item) => (
+                  <option value={item.id}>{item.name}</option>
+                ))
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label class="field__label" for="equipment-model">
+              Modelo <span class="req" aria-hidden="true">*</span>
+            </label>
+            <input class="input" id="equipment-model" name="model" maxlength="120" required />
+          </div>
+          <div class="field">
+            <label class="field__label" for="equipment-serial">Número de serie</label>
+            <input class="input" id="equipment-serial" name="serial_number" maxlength="120" />
+          </div>
+          <div class="field--full">
+            <p class="field__hint">
+              El sistema genera el código interno <code class="mono">EQ-XXXXXX</code> al guardar.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Evidencia de recepción -->
+    <section class="card" aria-labelledby="paso-detalle">
+      <div class="card__header">
+        <h2 class="card__title" id="paso-detalle">
+          <span class="fieldset__step">3</span>
+          Evidencia de recepción
+        </h2>
+        <span class="badge badge--neutral">
+          <Icon name="shield" size={13} />
+          Inmutable después de guardar
+        </span>
+      </div>
+
+      <div class="card__body form-grid">
+        <div class="field field--full">
+          <label class="field__label" for="reported-failure">
+            Falla reportada por el cliente <span class="req" aria-hidden="true">*</span>
+          </label>
+          <textarea
+            class="textarea"
+            id="reported-failure"
+            name="reported_failure"
+            maxlength="500"
+            required
+            placeholder="Ej.: no enciende, se escucha un ruido al arrancar, la pantalla parpadea…"
+          ></textarea>
+          <span class="char-count" data-counter-for="reported-failure">0 / 500</span>
+        </div>
+
+        <div class="field field--full">
+          <label class="field__label" for="accessories">
+            Accesorios recibidos <span class="req" aria-hidden="true">*</span>
+          </label>
+          <textarea
+            class="textarea"
+            id="accessories"
+            name="accessories"
+            maxlength="500"
+            required
+            placeholder="Cargador, funda, cable, mouse, nada…"
+          ></textarea>
+          <div class="row row--between">
+            <button type="button" class="btn btn--link" data-fill="accessories" data-value="Sin accesorios">
+              Usar «Sin accesorios»
+            </button>
+            <span class="char-count" data-counter-for="accessories">0 / 500</span>
+          </div>
+        </div>
+
+        <div class="field field--full">
+          <label class="field__label" for="physical-condition">
+            Condición física al recibir <span class="req" aria-hidden="true">*</span>
+          </label>
+          <textarea
+            class="textarea"
+            id="physical-condition"
+            name="physical_condition"
+            maxlength="500"
+            required
+            placeholder="Ej.: carcasa con rayones leves, bisagra floja, sin golpes visibles…"
+          ></textarea>
+          <div class="row row--between">
+            <button
+              type="button"
+              class="btn btn--link"
+              data-fill="physical-condition"
+              data-value="Sin daños visibles"
+            >
+              Usar «Sin daños visibles»
+            </button>
+            <span class="char-count" data-counter-for="physical-condition">0 / 500</span>
+          </div>
+        </div>
+
+        <div class="field field--full">
+          <label class="check" for="password-requested">
+            <input type="checkbox" id="password-requested" name="password_requested" />
+            <span class="check__text">
+              <strong>Se solicitó la contraseña al cliente</strong>
+              <span>
+                Solo se registra el indicador: la contraseña nunca se almacena (RN-06).
+              </span>
+            </span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Garantía (se muestra solo si hay candidatos) -->
+    <section class="card" id="warranty-card" aria-labelledby="paso-garantia" hidden>
+      <div class="card__header">
+        <h2 class="card__title" id="paso-garantia">
+          <Icon name="shield" size={18} />
+          Posible reingreso en garantía
+        </h2>
+        <span class="badge badge--warning">RF-09</span>
+      </div>
+      <div class="card__body stack">
+        <Callout tone="warning" title="Este equipo tiene entregas recientes">
+          El sistema alerta, el técnico decide (RN-04). Si el reingreso es por la misma falla,
+          vinculalo al servicio original para conservar la trazabilidad.
+        </Callout>
+        <div id="warranty-candidates" class="pick-list" role="group" aria-label="Candidatos de garantía"></div>
+      </div>
+    </section>
+
+    <div class="row row--between">
+      <p class="field__hint" style="margin: 0;">
+        Los campos marcados con <span class="req">*</span> son obligatorios.
+      </p>
+      <div class="action-group">
+        <a class="btn btn--ghost" href="/">Cancelar</a>
+        <button type="submit" class="btn btn--primary btn--lg" id="submit-btn">
+          <Icon name="check" size={18} />
+          Registrar recepción
+        </button>
+      </div>
+    </div>
+  </form>
+</Layout>
+
+<script>
+  import { apiFetch, postJson } from "../lib/api.js";
+  import { describeApiError, setBusy, showFormError, toast } from "../lib/ui.js";
+  import { initials, truncate } from "../lib/format.js";
+
+  const form = document.getElementById("reception-form");
+  const formError = document.getElementById("form-error");
+  const submitBtn = document.getElementById("submit-btn");
+
+  const state = {
+    customerMode: "existing",
+    equipmentMode: "existing",
+    customer: null,
+    equipment: null,
+    originServiceId: null,
+  };
+
+  /* ------------------------------- Cliente -------------------------------- */
+
+  const customerResults = document.getElementById("customer-results");
+  const customerSelected = document.getElementById("customer-selected");
+  const customerSearch = document.getElementById("customer-search");
+
+  function renderSelectedCustomer() {
+    if (!state.customer) {
+      customerSelected.hidden = true;
+      customerSelected.innerHTML = "";
+      return;
+    }
+    customerSelected.hidden = false;
+    customerSelected.innerHTML = `
+      <div>
+        <strong class="callout__title">${escapeHtml(state.customer.name)}</strong>
+        ${escapeHtml(state.customer.phone)}
+        ${state.customer.document ? ` · Documento ${escapeHtml(state.customer.document)}` : ""}
+        · Cliente #${state.customer.id}
+      </div>`;
+  }
+
+  function renderCustomerResults(customers) {
+    customerResults.innerHTML = "";
+    if (customers.length === 0) {
+      customerResults.innerHTML =
+        '<p class="muted" style="font-size: var(--text-sm); margin: 0;">Sin coincidencias. Probá con otro texto o cargá un cliente nuevo.</p>';
+      return;
+    }
+
+    customers.forEach((customer) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pick";
+      button.setAttribute("aria-pressed", String(state.customer?.id === customer.id));
+      if (state.customer?.id === customer.id) button.classList.add("is-selected");
+      button.innerHTML = `
+        <span class="service-row__avatar" aria-hidden="true">${escapeHtml(initials(customer.name))}</span>
+        <span class="pick__main">
+          <span class="pick__title">${escapeHtml(customer.name)}</span>
+          <span class="pick__meta">${escapeHtml(customer.phone)}${customer.document ? ` · ${escapeHtml(customer.document)}` : ""} · Cliente #${customer.id}</span>
+        </span>
+        <span class="pick__check" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4.2 4.2L19 6.5"/></svg>
+        </span>`;
+      button.addEventListener("click", () => {
+        state.customer = customer;
+        renderSelectedCustomer();
+        renderCustomerResults(customers);
+      });
+      customerResults.appendChild(button);
+    });
+  }
+
+  async function searchCustomers() {
+    const query = customerSearch.value.trim();
+    if (query.length < 2) {
+      customerResults.innerHTML =
+        '<p class="muted" style="font-size: var(--text-sm); margin: 0;">Escribí al menos dos caracteres.</p>';
+      return;
+    }
+    customerResults.innerHTML = '<p class="muted" style="font-size: var(--text-sm); margin: 0;">Buscando…</p>';
+    try {
+      const page = await apiFetch(`/customers?q=${encodeURIComponent(query)}&limit=10`);
+      renderCustomerResults(page.items ?? []);
+    } catch (error) {
+      customerResults.innerHTML = `<p class="field__error" style="margin: 0;">${escapeHtml(describeApiError(error))}</p>`;
+    }
+  }
+
+  document.getElementById("customer-search-btn")?.addEventListener("click", searchCustomers);
+  customerSearch?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      searchCustomers();
+    }
+  });
+
+  /* -------------------------------- Equipo -------------------------------- */
+
+  const equipmentCard = document.getElementById("equipment-card");
+  const equipmentFeedback = document.getElementById("equipment-feedback");
+  const equipmentLookup = document.getElementById("equipment-lookup");
+  const warrantyCard = document.getElementById("warranty-card");
+  const warrantyCandidates = document.getElementById("warranty-candidates");
+
+  function renderEquipmentCard() {
+    const equipment = state.equipment;
+    if (!equipment) {
+      equipmentCard.hidden = true;
+      equipmentCard.innerHTML = "";
+      return;
+    }
+    equipmentCard.hidden = false;
+    equipmentCard.innerHTML = `
+      <div class="callout callout--info" style="flex-direction: column; align-items: stretch;">
+        <div class="row row--between">
+          <strong class="mono" style="font-size: 0.95rem;">${escapeHtml(equipment.internal_code)}</strong>
+          <span class="badge badge--neutral">Equipo #${equipment.id}</span>
+        </div>
+        <p style="margin: 4px 0 0; font-size: var(--text-sm);">
+          ${escapeHtml(equipment.device_type.name)} · ${escapeHtml(equipment.brand.name)} · ${escapeHtml(equipment.model)}
+          ${equipment.serial_number ? ` · Serie ${escapeHtml(equipment.serial_number)}` : ""}
+        </p>
+        <p style="margin: 2px 0 0; font-size: var(--text-xs);">
+          ${
+            equipment.current_owner
+              ? `Último dueño registrado: ${escapeHtml(equipment.current_owner.name)}`
+              : "Sin dueño registrado todavía"
+          } · ${equipment.previous_services_count} ${equipment.previous_services_count === 1 ? "servicio previo" : "servicios previos"}
+        </p>
+        <div class="row" style="margin-top: 8px;">
+          <a class="btn btn--sm btn--secondary" href="/equipments/${encodeURIComponent(equipment.internal_code)}">
+            Ver historial del equipo
+          </a>
+          <button type="button" class="btn btn--sm btn--ghost" id="clear-equipment">Quitar selección</button>
+        </div>
+      </div>`;
+
+    document.getElementById("clear-equipment")?.addEventListener("click", () => {
+      state.equipment = null;
+      renderEquipmentCard();
+      loadWarrantyCandidates();
+    });
+  }
+
+  async function lookupEquipment() {
+    const reference = equipmentLookup.value.trim();
+    if (!reference) {
+      equipmentFeedback.innerHTML = "";
+      return;
+    }
+    equipmentFeedback.innerHTML =
+      '<p class="muted" style="font-size: var(--text-sm); margin: 0;">Buscando equipo…</p>';
+    try {
+      let equipment;
+      try {
+        equipment = await apiFetch(`/equipments/lookup?internal_code=${encodeURIComponent(reference)}`);
+      } catch (error) {
+        if (error.status !== 404) throw error;
+        equipment = await apiFetch(
+          `/equipments/lookup?serial_number=${encodeURIComponent(reference)}`,
+        );
+      }
+      state.equipment = equipment;
+      equipmentFeedback.innerHTML = "";
+      renderEquipmentCard();
+      loadWarrantyCandidates();
+    } catch (error) {
+      state.equipment = null;
+      renderEquipmentCard();
+      equipmentFeedback.innerHTML =
+        error.status === 404
+          ? '<div class="callout callout--warning"><div><strong class="callout__title">No encontramos ese equipo</strong>Revisá el código o el número de serie, o cargalo como equipo nuevo.</div></div>'
+          : `<p class="field__error" style="margin: 0;">${escapeHtml(describeApiError(error))}</p>`;
+      loadWarrantyCandidates();
+    }
+  }
+
+  document.getElementById("equipment-lookup-btn")?.addEventListener("click", lookupEquipment);
+  equipmentLookup?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      lookupEquipment();
+    }
+  });
+
+  /* ------------------------------- Garantía ------------------------------- */
+
+  let warrantyItems = [];
+
+  function renderWarrantyCandidates() {
+    if (!state.equipment || warrantyItems.length === 0) {
+      warrantyCard.hidden = true;
+      warrantyCandidates.innerHTML = "";
+      state.originServiceId = null;
+      return;
+    }
+
+    warrantyCard.hidden = false;
+    warrantyCandidates.innerHTML = "";
+
+    const none = document.createElement("button");
+    none.type = "button";
+    none.className = "pick";
+    none.setAttribute("aria-pressed", String(state.originServiceId === null));
+    none.innerHTML = `
+      <span class="pick__main">
+        <span class="pick__title">Servicio nuevo, sin vínculo</span>
+        <span class="pick__meta">El reingreso no se imputa a una garantía anterior.</span>
+      </span>`;
+    none.addEventListener("click", () => {
+      state.originServiceId = null;
+      renderWarrantyCandidates();
+    });
+    warrantyCandidates.appendChild(none);
+
+    warrantyItems.forEach((candidate) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pick";
+      if (state.originServiceId === candidate.service_order_id) button.classList.add("is-selected");
+      button.setAttribute("aria-pressed", String(state.originServiceId === candidate.service_order_id));
+      button.innerHTML = `
+        <span class="pick__main">
+          <span class="pick__title">Vincular al servicio #${candidate.service_order_id}</span>
+          <span class="pick__meta">
+            Entregado hace ${candidate.days_since_delivery} días ·
+            ${candidate.warranty_days_left} días de garantía restantes ·
+            ${escapeHtml(truncate(candidate.reported_failure, 70))}
+          </span>
+        </span>
+        <span class="pick__check" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4.2 4.2L19 6.5"/></svg>
+        </span>`;
+      button.addEventListener("click", () => {
+        state.originServiceId = candidate.service_order_id;
+        renderWarrantyCandidates();
+      });
+      warrantyCandidates.appendChild(button);
+    });
+  }
+
+  async function loadWarrantyCandidates() {
+    warrantyItems = [];
+    if (!state.equipment || state.equipmentMode !== "existing") {
+      renderWarrantyCandidates();
+      return;
+    }
+    try {
+      const candidates = await apiFetch(
+        `/warranty/candidates?equipment_id=${state.equipment.id}`,
+      );
+      warrantyItems = candidates ?? [];
+    } catch {
+      warrantyItems = [];
+    }
+    renderWarrantyCandidates();
+  }
+
+  /* ----------------------------- Modos (XOR) ------------------------------ */
+
+  function setCustomerMode(mode) {
+    state.customerMode = mode;
+    document.querySelectorAll("[data-customer-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset.customerPanel !== mode;
+    });
+  }
+
+  function setEquipmentMode(mode) {
+    state.equipmentMode = mode;
+    document.querySelectorAll("[data-equipment-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset.equipmentPanel !== mode;
+    });
+    if (mode === "new") {
+      state.equipment = null;
+      renderEquipmentCard();
+      warrantyItems = [];
+      renderWarrantyCandidates();
+    }
+  }
+
+  form.querySelectorAll('input[name="customer-mode"]').forEach((radio) => {
+    radio.addEventListener("change", () => setCustomerMode(radio.value));
+  });
+
+  form.querySelectorAll('input[name="equipment-mode"]').forEach((radio) => {
+    radio.addEventListener("change", () => setEquipmentMode(radio.value));
+  });
+
+  /* ---------------------------- Contadores -------------------------------- */
+
+  document.querySelectorAll("[data-counter-for]").forEach((counter) => {
+    const field = document.getElementById(counter.dataset.counterFor);
+    if (!field) return;
+    const max = Number(field.getAttribute("maxlength")) || 500;
+    const update = () => {
+      const length = field.value.length;
+      counter.textContent = `${length} / ${max}`;
+      counter.dataset.over = String(length > max);
+    };
+    field.addEventListener("input", update);
+    update();
+  });
+
+  document.querySelectorAll("[data-fill]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = document.getElementById(button.dataset.fill);
+      if (!field) return;
+      field.value = button.dataset.value ?? "";
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.focus();
+    });
+  });
+
+  /* ------------------------------- Submit --------------------------------- */
+
+  function validate() {
+    if (state.customerMode === "existing" && !state.customer) {
+      return "Elegí un cliente de la lista o cargá uno nuevo.";
+    }
+    if (state.customerMode === "new") {
+      const name = document.getElementById("customer-name").value.trim();
+      const phone = document.getElementById("customer-phone").value.trim();
+      if (!name || !phone) return "El nombre y el teléfono del cliente son obligatorios.";
+    }
+    if (state.equipmentMode === "existing" && !state.equipment) {
+      return "Buscá y seleccioná el equipo existente, o cargalo como equipo nuevo.";
+    }
+    if (state.equipmentMode === "new") {
+      const deviceType = document.getElementById("device-type").value;
+      const brand = document.getElementById("brand").value;
+      const model = document.getElementById("equipment-model").value.trim();
+      if (!deviceType || !brand || !model) {
+        return "Para un equipo nuevo hacen falta tipo de dispositivo, marca y modelo.";
+      }
+    }
+    const reportedFailure = document.getElementById("reported-failure").value.trim();
+    const accessories = document.getElementById("accessories").value.trim();
+    const physicalCondition = document.getElementById("physical-condition").value.trim();
+    if (!reportedFailure || !accessories || !physicalCondition) {
+      return "La falla reportada, los accesorios y la condición física son obligatorios.";
+    }
+    return null;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    showFormError(formError, "");
+
+    const problem = validate();
+    if (problem) {
+      showFormError(formError, problem);
+      toast(problem, { tone: "error" });
+      return;
+    }
+
+    setBusy(submitBtn, true, "Registrando…");
+
+    try {
+      let customerId = state.customer?.id;
+
+      if (state.customerMode === "new") {
+        const created = await postJson("/customers", {
+          name: document.getElementById("customer-name").value.trim(),
+          phone: document.getElementById("customer-phone").value.trim(),
+          email: document.getElementById("customer-email").value.trim() || null,
+          document: document.getElementById("customer-document").value.trim() || null,
+        });
+        customerId = created.id;
+      }
+
+      const payload = {
+        customer_id: customerId,
+        reported_failure: document.getElementById("reported-failure").value.trim(),
+        accessories: document.getElementById("accessories").value.trim(),
+        physical_condition: document.getElementById("physical-condition").value.trim(),
+        password_requested: document.getElementById("password-requested").checked,
+      };
+
+      if (state.equipmentMode === "existing") {
+        payload.equipment_id = state.equipment.id;
+      } else {
+        payload.new_equipment = {
+          device_type_id: Number(document.getElementById("device-type").value),
+          brand_id: Number(document.getElementById("brand").value),
+          model: document.getElementById("equipment-model").value.trim(),
+          serial_number: document.getElementById("equipment-serial").value.trim() || null,
+        };
+      }
+
+      if (state.originServiceId) {
+        payload.origin_service_id = state.originServiceId;
+      }
+
+      const order = await postJson("/service-orders", payload);
+      toast("Recepción registrada. Abriendo la ficha del servicio…", { tone: "success" });
+      window.location.assign(`/service/${order.id}`);
+    } catch (error) {
+      setBusy(submitBtn, false);
+      const message = describeApiError(error);
+      showFormError(formError, message);
+      toast(message, { tone: "error" });
+      formError.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  });
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+</script>

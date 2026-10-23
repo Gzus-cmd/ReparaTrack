@@ -1,0 +1,27 @@
+---
+import Icon from "./Icon.astro";
+
+/**
+ * Tarjeta de métrica del tablero.
+ * `tone`: info | success | warning | danger | violet.
+ */
+const {
+  label,
+  value,
+  hint = undefined,
+  icon = "dashboard",
+  tone = "info",
+  href = undefined,
+} = Astro.props;
+
+const Tag = href ? "a" : "div";
+---
+
+<Tag class:list={["stat", `stat--${tone}`]} href={href}>
+  <div class="stat__top">
+    <span class="stat__label">{label}</span>
+    <span class="stat__icon"><Icon name={icon} size={18} /></span>
+  </div>
+  <strong class="stat__value">{value}</strong>
+  {hint && <span class="stat__hint">{hint}</span>}
+</Tag>

@@ -1,0 +1,15 @@
+---
+import Icon from "./Icon.astro";
+
+/**
+ * Estado vacío con icono, mensaje y acción opcional (slot `action`).
+ */
+const { icon = "box", title, text = undefined } = Astro.props;
+---
+
+<div class="empty">
+  <span class="empty__icon"><Icon name={icon} size={24} /></span>
+  <p class="empty__title">{title}</p>
+  {text && <p class="empty__text">{text}</p>}
+  {Astro.slots.has("action") && <slot name="action" />}
+</div>
