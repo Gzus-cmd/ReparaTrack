@@ -7,12 +7,13 @@ formularios HTML nativos con mensajes en español neutro.
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
-
 from support.factories import (
     add_diagnostic_detail,
     catalog_ids,
     create_order,
     make_customer,
+    new_equipment_payload,
+    reception_payload,
     transition,
 )
 
@@ -126,5 +127,61 @@ def test_invalid_web_transition_shows_a_spanish_message_and_keeps_the_state(
 
 def test_unknown_service_order_page_returns_404(client) -> None:
     response = client.get("/service-orders/9999")
+
+    assert response.status_code == 404
+
+
+# --- T-28 / T-30: tablero e historial del equipo ---------------------------------
+
+
+def test_dashboard_page_shows_the_workbench_in_spanish(client, session: Session, clock) -> None:
+    customer = make_customer(session, name="Ana Pérez", phone="999111222")
+    payload = reception_payload(customer.id, new_equipment=new_equipment_payload(session))
+    created = client.post("/api/v1/service-orders", json=payload)
+    assert created.status_code == 201, created.text
+    clock.travel(days=7)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Equipos en taller" in body
+    assert "Ana Pérez" in body
+    assert "EQ-000001" in body
+    assert "Recibido" in body
+    assert "7 días" in body
+    assert "Resumen por estado" in body
+
+
+def test_equipment_history_page_shows_services_states_and_details(client, session: Session) -> None:
+    ids = catalog_ids(session)
+    equipment = client.post(
+        "/api/v1/equipments",
+        json={
+            "device_type_id": ids["device_type_id"],
+            "brand_id": ids["brand_id"],
+            "model": "ThinkPad",
+            "serial_number": "SN-1",
+        },
+    ).json()
+    customer = make_customer(session, name="Ana Pérez", phone="999111222")
+    payload = reception_payload(customer.id, equipment_id=equipment["id"])
+    order = client.post("/api/v1/service-orders", json=payload).json()
+    add_diagnostic_detail(client, session, order["id"])
+
+    response = client.get(f"/equipments/{equipment['internal_code']}/history")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Historial del equipo" in body
+    assert "EQ-000001" in body
+    assert "Ana Pérez" in body
+    assert "Recibido" in body
+    assert "Diagnóstico de placa" in body
+    assert "Historial de estados" in body
+
+
+def test_unknown_equipment_history_page_returns_404(client) -> None:
+    response = client.get("/equipments/EQ-999999/history")
 
     assert response.status_code == 404

@@ -18,6 +18,7 @@ from app.db.repositories.state_history_repository import SqlStateHistoryReposito
 from app.domain.errors import NotFoundError
 from app.services.catalog_service import CatalogService
 from app.services.customer_service import CustomerService
+from app.services.dashboard_service import DashboardService
 from app.services.equipment_service import EquipmentService
 from app.services.ports import Clock
 from app.services.service_detail_service import ServiceDetailService
@@ -60,8 +61,11 @@ def build_catalog_service(catalog: str, session: Session) -> CatalogService:
 
 
 def build_customer_service(session: Session) -> CustomerService:
-    """Compone el servicio de clientes sobre el repositorio SQL."""
-    return CustomerService(SqlCustomerRepository(session))
+    """Compone el servicio de clientes sobre el repositorio SQL y sus servicios."""
+    return CustomerService(
+        SqlCustomerRepository(session),
+        service_orders=SqlServiceOrderRepository(session),
+    )
 
 
 def build_equipment_service(session: Session) -> EquipmentService:
@@ -70,7 +74,10 @@ def build_equipment_service(session: Session) -> EquipmentService:
         equipment_repository=SqlEquipmentRepository(session),
         device_types=_catalog_repository("device-types", session),
         brands=_catalog_repository("brands", session),
+        operation_types=_catalog_repository("operation-types", session),
+        components=_catalog_repository("components", session),
         service_orders=SqlServiceOrderRepository(session),
+        state_history=SqlStateHistoryRepository(session),
         customers=SqlCustomerRepository(session),
     )
 
@@ -93,6 +100,14 @@ def build_service_detail_service(session: Session) -> ServiceDetailService:
         service_orders=SqlServiceOrderRepository(session),
         operation_types=_catalog_repository("operation-types", session),
         components=_catalog_repository("components", session),
+    )
+
+
+def build_dashboard_service(session: Session, clock: Clock) -> DashboardService:
+    """Compone el tablero con el reloj inyectado por la petición."""
+    return DashboardService(
+        service_orders=SqlServiceOrderRepository(session),
+        clock=clock,
     )
 
 

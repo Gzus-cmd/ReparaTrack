@@ -45,3 +45,16 @@ class CustomerPage(BaseModel):
 
     items: list[CustomerRead]
     total: int
+
+
+class ServiceOrderSummaryRead(BaseModel):
+    """Resumen de un servicio dentro del historial del cliente (RF-08)."""
+
+    id: int
+    equipment_internal_code: str
+    received_at: datetime
+    delivered_at: datetime | None
+    status: str
+    status_label: str
+    reported_failure: str
+    origin_service_id: int | None

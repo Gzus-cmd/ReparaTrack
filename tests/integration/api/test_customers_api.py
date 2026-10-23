@@ -7,6 +7,7 @@ no deja filas (plan §4.3).
 from __future__ import annotations
 
 import pytest
+from support.factories import new_equipment_payload, reception_payload
 
 API = "/api/v1/customers"
 
@@ -170,3 +171,97 @@ def test_patch_unknown_customer_returns_404(client) -> None:
     response = client.patch(f"{API}/999", json={"phone": "977888999"})
 
     assert response.status_code == 404
+
+
+# --- T-31: historial del cliente (RF-08) -------------------------------------
+
+
+ORDERS = "/api/v1/service-orders"
+
+
+def _receive_for_customer(client, session, customer_id: int, failure: str = "No enciende") -> dict:
+    payload = reception_payload(
+        customer_id,
+        reported_failure=failure,
+        new_equipment=new_equipment_payload(session),
+    )
+    response = client.post(ORDERS, json=payload)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def _history(client, customer_id: int, **params):
+    return client.get(f"{API}/{customer_id}/history", params=params)
+
+
+def test_customer_history_lists_services_most_recent_first(client, session, clock) -> None:
+    customer = _create(client, name="Ana Pérez").json()
+    first = _receive_for_customer(client, session, customer["id"], "No enciende")
+    clock.travel(days=2)
+    second = _receive_for_customer(client, session, customer["id"], "Se apaga sola")
+
+    response = _history(client, customer["id"])
+
+    assert response.status_code == 200, response.text
+    items = response.json()
+    assert [item["id"] for item in items] == [second["id"], first["id"]]
+    assert items[0]["equipment_internal_code"] == "EQ-000002"
+    assert items[1]["equipment_internal_code"] == "EQ-000001"
+    assert items[0]["received_at"] == second["received_at"]
+    assert items[0]["delivered_at"] is None
+    assert items[0]["status"] == "RECEIVED"
+    assert items[0]["status_label"] == "Recibido"
+    assert items[0]["reported_failure"] == "Se apaga sola"
+    assert items[0]["origin_service_id"] is None
+
+
+def test_customer_history_filters_by_received_range(client, session, clock) -> None:
+    customer = _create(client, name="Ana Pérez").json()
+    first = _receive_for_customer(client, session, customer["id"])
+    clock.travel(days=2)
+    second = _receive_for_customer(client, session, customer["id"])
+    clock.travel(days=2)
+    third = _receive_for_customer(client, session, customer["id"])
+
+    response = _history(
+        client, customer["id"], **{"from": second["received_at"], "to": third["received_at"]}
+    )
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()] == [third["id"], second["id"]]
+
+    narrowed = _history(client, customer["id"], **{"from": third["received_at"]})
+    assert [item["id"] for item in narrowed.json()] == [third["id"]]
+    assert first["id"] not in [item["id"] for item in narrowed.json()]
+
+
+def test_customer_history_without_services_returns_an_empty_list(client) -> None:
+    customer = _create(client, name="Ana Pérez").json()
+
+    response = _history(client, customer["id"])
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_customer_history_unknown_customer_returns_404(client) -> None:
+    response = _history(client, 999)
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_customer_history_rejects_an_inverted_range(client, session, clock) -> None:
+    customer = _create(client, name="Ana Pérez").json()
+    first = _receive_for_customer(client, session, customer["id"])
+    clock.travel(days=2)
+    second = _receive_for_customer(client, session, customer["id"])
+
+    response = _history(
+        client, customer["id"], **{"from": second["received_at"], "to": first["received_at"]}
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "validation_error"
+    assert error["details"]["field"] == "from"
