@@ -2,14 +2,38 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter
 
-from app.api.routers import catalogs, customers, dashboard, equipments, health, service_orders
+from app.api.routers import (
+    abandonment,
+    catalogs,
+    customers,
+    dashboard,
+    equipments,
+    health,
+    service_orders,
+    warranty,
+)
+from app.api.schemas.common import ErrorEnvelope
+
+#: Envelope de error uniforme documentado en cada endpoint (plan §3).
+ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    404: {"model": ErrorEnvelope, "description": "Recurso inexistente."},
+    409: {"model": ErrorEnvelope, "description": "Conflicto de negocio o de estado."},
+    422: {"model": ErrorEnvelope, "description": "Datos de entrada inválidos."},
+}
 
 api_router = APIRouter()
-api_router.include_router(health.router)
-api_router.include_router(catalogs.router)
-api_router.include_router(customers.router)
-api_router.include_router(equipments.router)
-api_router.include_router(service_orders.router)
-api_router.include_router(dashboard.router)
+for _router in (
+    health.router,
+    catalogs.router,
+    customers.router,
+    equipments.router,
+    service_orders.router,
+    dashboard.router,
+    warranty.router,
+    abandonment.router,
+):
+    api_router.include_router(_router, responses=ERROR_RESPONSES)

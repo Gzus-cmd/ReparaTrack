@@ -1,0 +1,17 @@
+# Puertas locales antes de cada commit: lint, formato y unitarias rápidas.
+# La cobertura y la integración corren en CI (NFR-06).
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.2
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: pytest-unit
+        name: pytest unitarias
+        entry: python -m pytest tests/unit -q --no-cov
+        language: system
+        pass_filenames: false
+        types: [python]

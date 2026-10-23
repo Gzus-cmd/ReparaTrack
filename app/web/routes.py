@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlencode
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
 from app.api.deps import (
     ClockDep,
@@ -23,10 +24,12 @@ from app.api.deps import (
     build_equipment_service,
     build_service_detail_service,
     build_service_order_service,
+    build_warranty_service,
 )
 from app.domain.enums import ServiceStatus
 from app.domain.errors import DomainError
 from app.services.service_order_service import NewEquipment
+from app.services.warranty_service import WarrantyCandidate
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -146,9 +149,13 @@ def delete_value_form(catalog: str, catalog_id: int, session: SessionDep) -> Red
 
 
 def _render_reception(
-    request: Request, session: Session, *, error: str | None = None
+    request: Request,
+    session: Session,
+    *,
+    error: str | None = None,
+    warranty_candidates: list[WarrantyCandidate] | None = None,
 ) -> HTMLResponse:
-    """Contexto completo del formulario de recepción (RF-04)."""
+    """Contexto completo del formulario de recepción (RF-04, RF-09)."""
     customers = build_customer_service(session).search("", limit=200).items
     device_types = build_catalog_service("device-types", session).list_values()
     brands = build_catalog_service("brands", session).list_values()
@@ -160,6 +167,7 @@ def _render_reception(
             "device_types": device_types,
             "brands": brands,
             "error": error,
+            "warranty_candidates": warranty_candidates or [],
         },
     )
 
@@ -170,24 +178,34 @@ def _boolean(form: dict[str, str], field: str) -> bool:
 
 
 @router.get("/reception", response_class=HTMLResponse, summary="Formulario de recepción")
-def reception_page(request: Request, session: SessionDep) -> HTMLResponse:
-    """Muestra los cinco campos obligatorios de la recepción."""
-    return _render_reception(request, session)
+def reception_page(
+    request: Request,
+    session: SessionDep,
+    clock: ClockDep,
+    equipment_id: int | None = None,
+) -> HTMLResponse:
+    """Muestra los cinco campos y, si se indica el equipo, el aviso de garantía."""
+    candidates = (
+        []
+        if equipment_id is None
+        else build_warranty_service(session, clock).candidates(equipment_id=equipment_id)
+    )
+    return _render_reception(request, session, warranty_candidates=candidates)
 
 
 @router.post("/reception", summary="Recepción desde la vista")
-async def create_reception_form(
-    request: Request, session: SessionDep, clock: ClockDep
-) -> Response:
+async def create_reception_form(request: Request, session: SessionDep, clock: ClockDep) -> Response:
     """Crea el servicio y redirige a su ficha; un error vuelve al formulario."""
     form = await _form_data(request)
     try:
         equipment_id: int | None
         new_equipment: NewEquipment | None
         if form.get("equipment_mode", "new") == "existing":
-            equipment_id = build_equipment_service(session).lookup(
-                internal_code=form.get("equipment_internal_code", "")
-            ).id
+            equipment_id = (
+                build_equipment_service(session)
+                .lookup(internal_code=form.get("equipment_internal_code", ""))
+                .id
+            )
             new_equipment = None
         else:
             equipment_id = None
@@ -197,6 +215,7 @@ async def create_reception_form(
                 model=form.get("new_model", ""),
                 serial_number=(form.get("new_serial_number") or "").strip() or None,
             )
+        raw_origin = (form.get("origin_service_id") or "").strip()
         order = build_service_order_service(session, clock).create(
             customer_id=int(form.get("customer_id") or 0),
             equipment_id=equipment_id,
@@ -205,6 +224,7 @@ async def create_reception_form(
             accessories=form.get("accessories", ""),
             physical_condition=form.get("physical_condition", ""),
             password_requested=_boolean(form, "password_requested"),
+            origin_service_id=int(raw_origin) if raw_origin else None,
         )
     except DomainError as exc:
         return _render_reception(request, session, error=exc.message)

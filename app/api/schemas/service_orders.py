@@ -38,14 +38,20 @@ class ServiceOrderCreate(BaseModel):
     reported_failure: str = Field(
         min_length=1, max_length=500, description="Falla reportada por el cliente."
     )
-    accessories: str = Field(
-        min_length=1, max_length=500, description="Accesorios recibidos."
-    )
+    accessories: str = Field(min_length=1, max_length=500, description="Accesorios recibidos.")
     physical_condition: str = Field(
         min_length=1, max_length=500, description="Condición física; nunca se edita."
     )
     password_requested: bool = Field(
         default=False, description="Solo el indicador: nunca se almacena la contraseña."
+    )
+    origin_service_id: int | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Servicio entregado al que se vincula el reingreso (RF-09). "
+            "El sistema alerta; el técnico decide (RN-04)."
+        ),
     )
 
 
@@ -110,9 +116,7 @@ class TransitionRequest(BaseModel):
     comment: str | None = Field(
         default=None, max_length=500, description="Motivo u observación opcional."
     )
-    confirm: bool = Field(
-        default=False, description="Confirmación explícita para marcar abandono."
-    )
+    confirm: bool = Field(default=False, description="Confirmación explícita para marcar abandono.")
 
 
 class StateHistoryRead(BaseModel):

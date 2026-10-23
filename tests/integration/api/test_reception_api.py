@@ -11,8 +11,6 @@ from datetime import datetime
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-
-from app.db.models import Equipment, ServiceOrder, StateHistory
 from support.factories import (
     SERVICE_ORDERS_URL,
     create_order,
@@ -21,6 +19,8 @@ from support.factories import (
     reception_payload,
     transition,
 )
+
+from app.db.models import Equipment, ServiceOrder, StateHistory
 
 ORDERS = SERVICE_ORDERS_URL
 

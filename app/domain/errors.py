@@ -255,3 +255,93 @@ class ImmutableFieldError(DomainError):
             new=new,
         )
 
+
+# --- RF-09: vínculo de garantía (T-32) ---------------------------------------
+
+
+class WarrantyExpiredError(DomainError):
+    """RN-04: el origen superó los 90 días y obliga a crear un servicio nuevo."""
+
+    code = "warranty_expired"
+    default_message = "La garantía del servicio de origen ya expiró."
+
+    def __init__(
+        self,
+        origin_service_id: int,
+        days_since_delivery: int,
+        warranty_days: int,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(
+            message
+            or (
+                f"El servicio de origen {origin_service_id} se entregó hace "
+                f"{days_since_delivery} días y la garantía es de {warranty_days} días."
+            ),
+            origin_service_id=origin_service_id,
+            days_since_delivery=days_since_delivery,
+            warranty_days=warranty_days,
+        )
+
+
+class WarrantyEquipmentMismatchError(DomainError):
+    """RN-01: el reingreso vinculado debe pertenecer al mismo equipo."""
+
+    code = "warranty_equipment_mismatch"
+    default_message = "El servicio de origen pertenece a otro equipo."
+
+    def __init__(
+        self,
+        origin_service_id: int,
+        origin_equipment_id: int,
+        equipment_id: int | None = None,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(
+            message or "El servicio de origen pertenece a otro equipo y no se puede vincular.",
+            origin_service_id=origin_service_id,
+            origin_equipment_id=origin_equipment_id,
+            equipment_id=equipment_id,
+        )
+
+
+class OriginNotDeliveredError(DomainError):
+    """RF-09: solo un servicio entregado puede ser origen de garantía."""
+
+    code = "origin_not_delivered"
+    default_message = "El servicio de origen todavía no fue entregado."
+
+    def __init__(
+        self,
+        origin_service_id: int,
+        status: Any,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(
+            message or "Solo un servicio entregado puede originar un reingreso de garantía.",
+            origin_service_id=origin_service_id,
+            status=_status_value(status),
+        )
+
+
+class OriginAlreadyLinkedError(DomainError):
+    """R-06: `origin_service_id` es único; el segundo reingreso se vincula al primero."""
+
+    code = "origin_already_linked"
+    default_message = "El servicio de origen ya tiene un reingreso vinculado."
+
+    def __init__(
+        self,
+        origin_service_id: int,
+        linked_service_id: int,
+        message: str | None = None,
+    ) -> None:
+        super().__init__(
+            message
+            or (
+                "El servicio de origen ya tiene un reingreso vinculado; "
+                "vincule el nuevo servicio a ese reingreso."
+            ),
+            origin_service_id=origin_service_id,
+            linked_service_id=linked_service_id,
+        )

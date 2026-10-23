@@ -11,6 +11,7 @@ from support.factories import (
     add_diagnostic_detail,
     catalog_ids,
     create_order,
+    drive_to,
     make_customer,
     new_equipment_payload,
     reception_payload,
@@ -185,3 +186,136 @@ def test_unknown_equipment_history_page_returns_404(client) -> None:
     response = client.get("/equipments/EQ-999999/history")
 
     assert response.status_code == 404
+
+
+# --- T-33: aviso de garantía en la recepción (RF-09) -----------------------------
+
+
+def _equipment_via_api(client, session: Session, model: str = "ThinkPad") -> dict:
+    ids = catalog_ids(session)
+    response = client.post(
+        "/api/v1/equipments",
+        json={
+            "device_type_id": ids["device_type_id"],
+            "brand_id": ids["brand_id"],
+            "model": model,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def _delivered_order(client, session: Session, equipment_id: int) -> dict:
+    order = create_order(client, session, equipment_id=equipment_id)
+    return drive_to(client, session, order["id"], "DELIVERED")
+
+
+def _reception_form_data(customer_id: int, internal_code: str, **extra: str) -> dict[str, str]:
+    data = {
+        "customer_id": str(customer_id),
+        "equipment_mode": "existing",
+        "equipment_internal_code": internal_code,
+        "reported_failure": "Vuelve a fallar",
+        "accessories": "Cargador",
+        "physical_condition": "Sin marcas visibles",
+    }
+    data.update(extra)
+    return data
+
+
+def test_reception_shows_warranty_candidates_with_days_and_both_choices(
+    client, session: Session, clock
+) -> None:
+    equipment = _equipment_via_api(client, session)
+    origin = _delivered_order(client, session, equipment["id"])
+    clock.travel(days=89)
+
+    response = client.get(f"/reception?equipment_id={equipment['id']}")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Garantía" in body
+    assert "89 días" in body
+    assert "Vincular" in body
+    assert "servicio nuevo" in body
+    assert f'name="origin_service_id" value="{origin["id"]}"' in body
+
+
+def test_reception_without_candidates_hides_the_warranty_block(client, session: Session) -> None:
+    equipment = _equipment_via_api(client, session)
+    create_order(client, session, equipment_id=equipment["id"])
+
+    response = client.get(f"/reception?equipment_id={equipment['id']}")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "Garantía" not in body
+    assert "servicio nuevo" not in body
+    assert 'name="origin_service_id"' not in body
+
+
+def test_reception_choice_new_service_creates_no_link(client, session: Session) -> None:
+    equipment = _equipment_via_api(client, session)
+    customer = make_customer(session)
+
+    response = client.post(
+        "/reception",
+        data=_reception_form_data(customer.id, equipment["internal_code"]),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    order = client.get(f"/api/v1{response.headers['location']}").json()
+    assert order["origin_service_id"] is None
+
+
+def test_reception_choice_linking_sends_the_origin(client, session: Session, clock) -> None:
+    equipment = _equipment_via_api(client, session)
+    origin = _delivered_order(client, session, equipment["id"])
+    clock.travel(days=30)
+    customer = make_customer(session)
+
+    response = client.post(
+        "/reception",
+        data=_reception_form_data(
+            customer.id,
+            equipment["internal_code"],
+            origin_service_id=str(origin["id"]),
+        ),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303, response.text
+    order = client.get(f"/api/v1{response.headers['location']}").json()
+    assert order["origin_service_id"] == origin["id"]
+
+
+# --- T-36: contrato OpenAPI documentado (NFR-06) ---------------------------------
+
+
+def test_openapi_documents_every_requirement_with_a_spanish_summary(client) -> None:
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+
+    for requirement, path in {
+        "RF-01 maestros": "/api/v1/catalogs/{catalog}",
+        "RF-02 clientes": "/api/v1/customers",
+        "RF-03 equipos": "/api/v1/equipments/lookup",
+        "RF-04 recepción": "/api/v1/service-orders",
+        "RF-05 detalle": "/api/v1/service-orders/{service_order_id}/details",
+        "RF-06 transiciones": "/api/v1/service-orders/{service_order_id}/transitions",
+        "RF-07 tablero": "/api/v1/dashboard/workbench",
+        "RF-08 historial": "/api/v1/equipments/{equipment_ref}/history",
+        "RF-09 garantía": "/api/v1/warranty/candidates",
+        "RF-10 abandono": "/api/v1/abandonment/candidates",
+    }.items():
+        assert path in paths, requirement
+
+    for path, operations in paths.items():
+        for method, operation in operations.items():
+            assert operation.get("summary", "").strip(), f"{method.upper()} {path} sin resumen"
+
+    schemas = schema["components"]["schemas"]
+    assert "ErrorEnvelope" in schemas
+    assert "error" in schemas["ErrorEnvelope"]["properties"]
+    assert set(schemas["ErrorDetail"]["properties"]) == {"code", "message", "details"}

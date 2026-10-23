@@ -5,7 +5,8 @@ description = "Sistema de Trazabilidad de Soporte Técnico (TerabyteRS)"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+# Puertas de calidad del plan §4.5: cobertura con ramas y umbral del 80 %.
+addopts = "-ra --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
 
 [tool.ruff]

@@ -16,6 +16,7 @@ from app.db.repositories.equipment_repository import SqlEquipmentRepository
 from app.db.repositories.service_order_repository import SqlServiceOrderRepository
 from app.db.repositories.state_history_repository import SqlStateHistoryRepository
 from app.domain.errors import NotFoundError
+from app.services.abandonment_service import AbandonmentService
 from app.services.catalog_service import CatalogService
 from app.services.customer_service import CustomerService
 from app.services.dashboard_service import DashboardService
@@ -23,6 +24,7 @@ from app.services.equipment_service import EquipmentService
 from app.services.ports import Clock
 from app.services.service_detail_service import ServiceDetailService
 from app.services.service_order_service import ServiceOrderService
+from app.services.warranty_service import WarrantyService
 
 
 class SystemClock:
@@ -106,6 +108,22 @@ def build_service_detail_service(session: Session) -> ServiceDetailService:
 def build_dashboard_service(session: Session, clock: Clock) -> DashboardService:
     """Compone el tablero con el reloj inyectado por la petición."""
     return DashboardService(
+        service_orders=SqlServiceOrderRepository(session),
+        clock=clock,
+    )
+
+
+def build_warranty_service(session: Session, clock: Clock) -> WarrantyService:
+    """Compone el servicio de garantía con el reloj inyectado por la petición."""
+    return WarrantyService(
+        service_orders=SqlServiceOrderRepository(session),
+        clock=clock,
+    )
+
+
+def build_abandonment_service(session: Session, clock: Clock) -> AbandonmentService:
+    """Compone el servicio de abandono con el reloj inyectado por la petición."""
+    return AbandonmentService(
         service_orders=SqlServiceOrderRepository(session),
         clock=clock,
     )

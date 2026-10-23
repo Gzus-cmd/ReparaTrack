@@ -15,7 +15,11 @@ from app.domain.enums import ServiceStatus
 from app.domain.errors import (
     EquipmentSourceInvalidError,
     NotFoundError,
+    OriginAlreadyLinkedError,
+    OriginNotDeliveredError,
     ValidationError,
+    WarrantyEquipmentMismatchError,
+    WarrantyExpiredError,
 )
 from app.services.equipment_service import EquipmentService
 from app.services.ports import (
@@ -30,6 +34,7 @@ from app.services.ports import (
 )
 
 SERVICE_ORDER_RESOURCE = "la orden de servicio"
+ORIGIN_RESOURCE = "la orden de servicio de origen"
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,8 +165,14 @@ class ServiceOrderService:
         equipment_id: int | None = None,
         new_equipment: NewEquipment | None = None,
         password_requested: bool = False,
+        origin_service_id: int | None = None,
     ) -> ServiceOrderView:
-        """Valida todo y recién después escribe la orden con su fila inicial."""
+        """Valida todo y recién después escribe la orden con su fila inicial.
+
+        El vínculo de garantía (RF-09) se valida aquí, dentro de la misma
+        transacción y antes de cualquier escritura: el sistema alerta y el
+        técnico decide (RN-04).
+        """
         if (equipment_id is None) == (new_equipment is None):
             raise EquipmentSourceInvalidError()
 
@@ -173,15 +184,26 @@ class ServiceOrderService:
             raise ValidationError("accessories", "Los accesorios son obligatorios.")
         condition = _normalize_text(physical_condition)
         if not condition:
-            raise ValidationError(
-                "physical_condition", "La condición física es obligatoria."
-            )
+            raise ValidationError("physical_condition", "La condición física es obligatoria.")
 
         if self._customers.get(customer_id) is None:
             raise ValidationError("customer_id", "El cliente indicado no existe.")
+
+        now = self._clock.now()
+        origin = (
+            None if origin_service_id is None else self._warranty_origin(origin_service_id, now)
+        )
         if equipment_id is not None:
             self._require_equipment(equipment_id)
+            if origin is not None:
+                self._ensure_origin_equipment(origin, equipment_id)
         else:
+            if origin is not None:
+                # Un equipo nuevo nunca puede ser el origen de garantía (RN-01).
+                raise WarrantyEquipmentMismatchError(
+                    origin_service_id=origin.id,
+                    origin_equipment_id=origin.equipment_id,
+                )
             assert new_equipment is not None  # garantizado por el XOR
             created_equipment = self._equipment_service.create(
                 device_type_id=new_equipment.device_type_id,
@@ -191,7 +213,6 @@ class ServiceOrderService:
             )
             equipment_id = created_equipment.id
 
-        now = self._clock.now()
         order = self._service_orders.add(
             equipment_id=equipment_id,
             customer_id=customer_id,
@@ -201,6 +222,7 @@ class ServiceOrderService:
             accessories=received_accessories,
             password_requested=password_requested,
             status=ServiceStatus.RECEIVED.value,
+            origin_service_id=origin_service_id,
         )
         self._state_history.add(
             service_order_id=order.id,
@@ -238,9 +260,7 @@ class ServiceOrderService:
         total = self._service_orders.count(
             status=status, customer_id=customer_id, equipment_id=equipment_id
         )
-        return ServiceOrderPage(
-            items=[self._view(order) for order in records], total=total
-        )
+        return ServiceOrderPage(items=[self._view(order) for order in records], total=total)
 
     # --- RF-06: transición de estado -----------------------------------------
 
@@ -329,6 +349,40 @@ class ServiceOrderService:
             raise ValidationError("equipment_id", "El equipo indicado no existe.")
         return equipment
 
+    def _warranty_origin(self, origin_service_id: int, now: datetime) -> ServiceOrderRecord:
+        """Valida el origen de garantía antes de escribir cualquier fila (RF-09)."""
+        origin = self._service_orders.get(origin_service_id)
+        if origin is None:
+            raise NotFoundError(ORIGIN_RESOURCE, origin_service_id)
+        status = ServiceStatus.parse(origin.status)
+        if status is not ServiceStatus.DELIVERED:
+            raise OriginNotDeliveredError(origin_service_id, status)
+        evaluation = rules.warranty_eligibility(
+            None if origin.delivered_at is None else _as_utc(origin.delivered_at),
+            status,
+            now,
+        )
+        if not evaluation.eligible:
+            raise WarrantyExpiredError(
+                origin_service_id,
+                evaluation.days_since_delivery or 0,
+                rules.WARRANTY_DAYS,
+            )
+        linked = self._service_orders.find_by_origin(origin_service_id)
+        if linked is not None:
+            raise OriginAlreadyLinkedError(origin_service_id, linked.id)
+        return origin
+
+    @staticmethod
+    def _ensure_origin_equipment(origin: ServiceOrderRecord, equipment_id: int) -> None:
+        """RN-01: el reingreso vinculado pertenece al mismo equipo que el origen."""
+        if origin.equipment_id != equipment_id:
+            raise WarrantyEquipmentMismatchError(
+                origin_service_id=origin.id,
+                origin_equipment_id=origin.equipment_id,
+                equipment_id=equipment_id,
+            )
+
     def _view(self, order: ServiceOrderRecord) -> ServiceOrderView:
         equipment = self._require_equipment(order.equipment_id)
         customer = self._customers.get(order.customer_id)
@@ -378,16 +432,12 @@ class ServiceOrderService:
         entered_at: datetime,
         now: datetime,
     ) -> tuple[TransitionOption, ...]:
-        targets = sorted(
-            state_machine.allowed_targets(status), key=list(ServiceStatus).index
-        )
+        targets = sorted(state_machine.allowed_targets(status), key=list(ServiceStatus).index)
         return tuple(
             TransitionOption(
                 to_status=target.value,
                 status_label=target.label,
-                blocked_reason=self._blocked_reason(
-                    status, target, details_count, entered_at, now
-                ),
+                blocked_reason=self._blocked_reason(status, target, details_count, entered_at, now),
             )
             for target in targets
         )
