@@ -38,6 +38,33 @@ const stats = {
   impresoras: countByType("Impresora"),
 };
 const deviceIcon = (name) => (name === "Impresora" ? "box" : "monitor");
+
+const typeFilter = (url.searchParams.get("type") ?? "").trim();
+const brandFilter = (url.searchParams.get("brand") ?? "").trim();
+const deviceTypes = [...new Set(all.map((item) => item.device_type?.name).filter(Boolean))].sort();
+const brands = [...new Set(all.map((item) => item.brand?.name).filter(Boolean))].sort();
+
+const filtered = all.filter((item) => {
+  if (typeFilter && item.device_type?.name !== typeFilter) return false;
+  if (brandFilter && item.brand?.name !== brandFilter) return false;
+  return true;
+});
+
+const PAGE_SIZE = 6;
+const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+const requestedPage = Number(url.searchParams.get("page") ?? "1");
+const page = Math.min(Math.max(1, Number.isFinite(requestedPage) ? requestedPage : 1), totalPages);
+const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+const buildUrl = (overrides = {}) => {
+  const params = new URLSearchParams();
+  if (typeFilter) params.set("type", typeFilter);
+  if (brandFilter) params.set("brand", brandFilter);
+  const nextPage = overrides.page ?? page;
+  if (nextPage > 1) params.set("page", String(nextPage));
+  const qs = params.toString();
+  return `/equipments${qs ? `?${qs}` : ""}`;
+};
 ---
 
 <Layout title="Equipos" description="Buscar equipos por código o serial y ver su historial." active="equipments">
@@ -113,12 +140,40 @@ const deviceIcon = (name) => (name === "Impresora" ? "box" : "monitor");
       <section class="card">
         <div class="card__header">
           <h2 class="card__title"><Icon name="monitor" size={18} /> Equipos registrados</h2>
+          <span class="muted">{filtered.length} de {all.length}</span>
         </div>
+
+        <div class="filters">
+          <form class="filter-bar" method="get" data-filter-form>
+            <label class="filter-field">
+              <span>Tipo</span>
+              <select class="input input--sm" name="type">
+                <option value="">Todos</option>
+                {deviceTypes.map((deviceType) => (
+                  <option value={deviceType} selected={deviceType === typeFilter}>{deviceType}</option>
+                ))}
+              </select>
+            </label>
+            <label class="filter-field">
+              <span>Marca</span>
+              <select class="input input--sm" name="brand">
+                <option value="">Todas</option>
+                {brands.map((brand) => (
+                  <option value={brand} selected={brand === brandFilter}>{brand}</option>
+                ))}
+              </select>
+            </label>
+            {(typeFilter || brandFilter) && <a class="btn btn--ghost btn--sm" href="/equipments">Limpiar</a>}
+          </form>
+        </div>
+
         {all.length === 0 ? (
           <EmptyState title="Sin equipos" text="El primer equipo se crea al recepcionar un servicio." />
+        ) : filtered.length === 0 ? (
+          <EmptyState title="Sin coincidencias" text="Probá con otro tipo de dispositivo o marca." />
         ) : (
           <ul class="plain-list equipment-list">
-            {all.map((item) => (
+            {paged.map((item) => (
               <li>
                 <a class="equipment-row" href={`/equipments?q=${encodeURIComponent(item.internal_code)}`}>
                   <span class="equipment-row__icon">
@@ -146,7 +201,31 @@ const deviceIcon = (name) => (name === "Impresora" ? "box" : "monitor");
             ))}
           </ul>
         )}
+
+        {totalPages > 1 && (
+          <nav class="pagination" aria-label="Paginación de equipos">
+            {page > 1 ? (
+              <a class="btn btn--ghost btn--sm" href={buildUrl({ page: page - 1 })}>← Anterior</a>
+            ) : (
+              <span />
+            )}
+            <span class="pagination__info">Página {page} de {totalPages}</span>
+            {page < totalPages ? (
+              <a class="btn btn--ghost btn--sm" href={buildUrl({ page: page + 1 })}>Siguiente →</a>
+            ) : (
+              <span />
+            )}
+          </nav>
+        )}
       </section>
     </>
   )}
+
+  <script>
+    document.querySelectorAll("[data-filter-form]").forEach((form) => {
+      form.querySelectorAll("select").forEach((select) => {
+        select.addEventListener("change", () => form.submit());
+      });
+    });
+  </script>
 </Layout>

@@ -16,6 +16,29 @@ const items = result.ok ? (Array.isArray(result.data) ? result.data : result.dat
 const total = result.ok ? (Array.isArray(result.data) ? result.data.length : result.data.total ?? items.length) : 0;
 const withEmail = items.filter((customer) => customer.email).length;
 const withDocument = items.filter((customer) => customer.document).length;
+
+const filter = (url.searchParams.get("filter") ?? "").trim();
+const filtered = items.filter((customer) => {
+  if (filter === "email") return Boolean(customer.email);
+  if (filter === "document") return Boolean(customer.document);
+  return true;
+});
+
+const PAGE_SIZE = 6;
+const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+const requestedPage = Number(url.searchParams.get("page") ?? "1");
+const page = Math.min(Math.max(1, Number.isFinite(requestedPage) ? requestedPage : 1), totalPages);
+const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+const buildUrl = (overrides = {}) => {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (filter) params.set("filter", filter);
+  const nextPage = overrides.page ?? page;
+  if (nextPage > 1) params.set("page", String(nextPage));
+  const qs = params.toString();
+  return `/customers${qs ? `?${qs}` : ""}`;
+};
 ---
 
 <Layout title="Clientes" description="Contactos registrados en el taller." active="customers">
@@ -45,13 +68,32 @@ const withDocument = items.filter((customer) => customer.document).length;
 
       <section class="card">
         <div class="card__header">
-          <h2 class="card__title"><Icon name="users" size={18} /> {total} {total === 1 ? "cliente" : "clientes"}</h2>
+          <h2 class="card__title">
+            <Icon name="users" size={18} /> {filtered.length} de {total} {total === 1 ? "cliente" : "clientes"}
+          </h2>
         </div>
+
+        <div class="filters">
+          <form class="filter-bar" method="get" data-filter-form>
+            <label class="filter-field">
+              <span>Contacto</span>
+              <select class="input input--sm" name="filter">
+                <option value="">Todos</option>
+                <option value="email" selected={filter === "email"}>Con email</option>
+                <option value="document" selected={filter === "document"}>Con documento</option>
+              </select>
+            </label>
+            {filter && <a class="btn btn--ghost btn--sm" href="/customers">Limpiar</a>}
+          </form>
+        </div>
+
         {items.length === 0 ? (
           <EmptyState title="Sin clientes" text="El primer cliente se crea al recepcionar un equipo." />
+        ) : filtered.length === 0 ? (
+          <EmptyState title="Sin coincidencias" text="Probá con otro filtro de contacto." />
         ) : (
           <ul class="plain-list customer-list">
-            {items.map((customer) => (
+            {paged.map((customer) => (
               <li class="customer-row">
                 <span class="service-row__avatar" aria-hidden="true">{initials(customer.name)}</span>
                 <span class="customer-row__main">
@@ -70,7 +112,31 @@ const withDocument = items.filter((customer) => customer.document).length;
             ))}
           </ul>
         )}
+
+        {totalPages > 1 && (
+          <nav class="pagination" aria-label="Paginación de clientes">
+            {page > 1 ? (
+              <a class="btn btn--ghost btn--sm" href={buildUrl({ page: page - 1 })}>← Anterior</a>
+            ) : (
+              <span />
+            )}
+            <span class="pagination__info">Página {page} de {totalPages}</span>
+            {page < totalPages ? (
+              <a class="btn btn--ghost btn--sm" href={buildUrl({ page: page + 1 })}>Siguiente →</a>
+            ) : (
+              <span />
+            )}
+          </nav>
+        )}
       </section>
     </>
   )}
+
+  <script>
+    document.querySelectorAll("[data-filter-form]").forEach((form) => {
+      form.querySelectorAll("select").forEach((select) => {
+        select.addEventListener("change", () => form.submit());
+      });
+    });
+  </script>
 </Layout>

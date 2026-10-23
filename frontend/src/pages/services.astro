@@ -30,6 +30,19 @@ const services = items.map((s) => ({
 const chips = [{ key: null, label: "Todos", count: total }].concat(
   STATUSES.map((st) => ({ key: st.key, label: st.label, count: null })),
 );
+
+const PAGE_SIZE = 8;
+const totalPages = Math.max(1, Math.ceil(services.length / PAGE_SIZE));
+const requestedPage = Number(url.searchParams.get("page") ?? "1");
+const page = Math.min(Math.max(1, Number.isFinite(requestedPage) ? requestedPage : 1), totalPages);
+const paged = services.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+const pageUrl = (targetPage) => {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (targetPage > 1) params.set("page", String(targetPage));
+  const qs = params.toString();
+  return `/services${qs ? `?${qs}` : ""}`;
+};
 ---
 
 <Layout title="Servicios" description="Bandeja completa de servicios del taller." active="services">
@@ -75,7 +88,23 @@ const chips = [{ key: null, label: "Todos", count: total }].concat(
             ))}
           </div>
         </div>
-        <ServiceList services={services} emptyTitle="No hay servicios" emptyText="Recepcioná un equipo para empezar." />
+        <ServiceList services={paged} emptyTitle="No hay servicios" emptyText="Recepcioná un equipo para empezar." />
+
+        {totalPages > 1 && (
+          <nav class="pagination" aria-label="Paginación de servicios">
+            {page > 1 ? (
+              <a class="btn btn--ghost btn--sm" href={pageUrl(page - 1)}>← Anterior</a>
+            ) : (
+              <span />
+            )}
+            <span class="pagination__info">Página {page} de {totalPages}</span>
+            {page < totalPages ? (
+              <a class="btn btn--ghost btn--sm" href={pageUrl(page + 1)}>Siguiente →</a>
+            ) : (
+              <span />
+            )}
+          </nav>
+        )}
       </section>
     )
   }

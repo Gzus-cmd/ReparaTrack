@@ -1788,12 +1788,12 @@ fieldset {
 }
 
 .equipment-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 42px minmax(150px, 1.3fr) minmax(200px, 2fr) 86px 24px;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-4);
   width: 100%;
-  padding: 13px 14px;
-  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
   transition: background 0.15s ease;
 }
 .equipment-row:hover {
@@ -1815,7 +1815,6 @@ fieldset {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  flex: 1;
 }
 .equipment-row__code {
   font-family: var(--font-mono);
@@ -1832,7 +1831,7 @@ fieldset {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 .equipment-row__owner {
   display: inline-flex;
@@ -1842,6 +1841,7 @@ fieldset {
   color: var(--ink-600);
 }
 .equipment-row__count {
+  justify-self: end;
   font-size: 12.5px;
   color: var(--ink-500);
   white-space: nowrap;
@@ -1856,8 +1856,11 @@ fieldset {
 }
 
 .customer-list > li.customer-row {
-  align-items: flex-start;
-  padding: 14px 4px;
+  display: grid;
+  grid-template-columns: 40px minmax(140px, 1fr) minmax(0, 1.8fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
 }
 .customer-row__main {
   display: flex;
@@ -1882,9 +1885,62 @@ fieldset {
   color: var(--ink-600);
 }
 
-@media (max-width: 720px) {
+/* Filtros y paginación de tablas de registro */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+.filter-field select {
+  min-width: 160px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: var(--text-sm);
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border);
+}
+.pagination__info {
+  font-size: 12.5px;
+  color: var(--ink-500);
+}
+
+@media (max-width: 860px) {
+  .equipment-row {
+    grid-template-columns: 42px minmax(0, 1fr) 70px 24px;
+  }
   .equipment-row__meta {
     display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .customer-list > li.customer-row {
+    grid-template-columns: 40px minmax(0, 1fr);
   }
 }
 
