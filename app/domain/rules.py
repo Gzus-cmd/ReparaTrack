@@ -16,6 +16,7 @@ from app.domain.enums import ServiceStatus
 from app.domain.errors import (
     ConfirmationRequiredError,
     DetailsRequiredError,
+    ImmutableFieldError,
     InvalidTransitionError,
     ThresholdNotReachedError,
 )
@@ -230,3 +231,21 @@ def ensure_abandonment_allowed(
         raise ConfirmationRequiredError(to_status=ServiceStatus.ABANDONED)
 
     return evaluation
+
+
+# --- RN-08: evidencia de recepción inmutable (T-25) --------------------------
+
+
+def assert_condition_immutable(previous: str | None, new: str | None) -> None:
+    """Permite el no-op y rechaza cualquier cambio de la condición física.
+
+    La función es pura: no normaliza ni muta los valores recibidos, porque la
+    comparación debe ser exactamente la evidencia guardada contra la nueva.
+    """
+    if new == previous:
+        return
+    raise ImmutableFieldError(
+        field="physical_condition",
+        previous=previous,
+        new=new,
+    )

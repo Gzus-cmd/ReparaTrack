@@ -14,11 +14,14 @@ from app.db.repositories.catalog_repository import SqlCatalogRepository
 from app.db.repositories.customer_repository import SqlCustomerRepository
 from app.db.repositories.equipment_repository import SqlEquipmentRepository
 from app.db.repositories.service_order_repository import SqlServiceOrderRepository
+from app.db.repositories.state_history_repository import SqlStateHistoryRepository
 from app.domain.errors import NotFoundError
 from app.services.catalog_service import CatalogService
 from app.services.customer_service import CustomerService
 from app.services.equipment_service import EquipmentService
 from app.services.ports import Clock
+from app.services.service_detail_service import ServiceDetailService
+from app.services.service_order_service import ServiceOrderService
 
 
 class SystemClock:
@@ -69,6 +72,27 @@ def build_equipment_service(session: Session) -> EquipmentService:
         brands=_catalog_repository("brands", session),
         service_orders=SqlServiceOrderRepository(session),
         customers=SqlCustomerRepository(session),
+    )
+
+
+def build_service_order_service(session: Session, clock: Clock) -> ServiceOrderService:
+    """Compone el servicio de órdenes con el reloj inyectado por la petición."""
+    return ServiceOrderService(
+        service_orders=SqlServiceOrderRepository(session),
+        state_history=SqlStateHistoryRepository(session),
+        customers=SqlCustomerRepository(session),
+        equipments=SqlEquipmentRepository(session),
+        equipment_service=build_equipment_service(session),
+        clock=clock,
+    )
+
+
+def build_service_detail_service(session: Session) -> ServiceDetailService:
+    """Compone el servicio de detalles con los maestros de operación y componente."""
+    return ServiceDetailService(
+        service_orders=SqlServiceOrderRepository(session),
+        operation_types=_catalog_repository("operation-types", session),
+        components=_catalog_repository("components", session),
     )
 
 

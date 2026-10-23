@@ -14,13 +14,16 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    event,
     false,
     func,
+    inspect,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.db.base import Base
 from app.domain.enums import ServiceStatus
+from app.domain.rules import assert_condition_immutable
 
 DELIVERED_STATUS = ServiceStatus.DELIVERED.value
 
@@ -120,3 +123,19 @@ class ServiceDetail(Base):
         CheckConstraint("length(trim(description)) > 0", name="description_not_blank"),
         Index("ix_service_details_service_order_id", "service_order_id"),
     )
+
+
+@event.listens_for(Session, "before_flush")
+def _reject_physical_condition_changes(
+    session: Session, _flush_context: object, _instances: object
+) -> None:
+    """Tercera barrera de RN-08: ataja cualquier vía futura antes del `flush`."""
+    for instance in session.dirty:
+        if not isinstance(instance, ServiceOrder):
+            continue
+        history = inspect(instance).attrs.physical_condition.history
+        if not history.has_changes():
+            continue
+        previous = history.deleted[0] if history.deleted else None
+        new = history.added[0] if history.added else None
+        assert_condition_immutable(previous, new)
