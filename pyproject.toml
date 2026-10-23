@@ -8,6 +8,8 @@ requires-python = ">=3.11"
 # Puertas de calidad del plan §4.5: cobertura con ramas y umbral del 80 %.
 addopts = "-ra --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
+# Hace que `app` sea importable al correr `pytest` a secas (no solo `python -m pytest`).
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
