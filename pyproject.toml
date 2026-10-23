@@ -14,3 +14,7 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.coverage.run]
+# El seeder de demostración es una utilidad de desarrollo, no código de la app.
+omit = ["app/db/seed_demo.py"]
