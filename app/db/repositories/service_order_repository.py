@@ -8,9 +8,18 @@ from datetime import datetime
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
+from app.db.models.catalog import DeviceType
+from app.db.models.customer import Customer
+from app.db.models.equipment import Equipment
 from app.db.models.service_order import ServiceDetail, ServiceOrder
-from app.domain.enums import ServiceStatus
-from app.services.ports import ServiceDetailRecord, ServiceOrderRecord
+from app.db.models.state_history import StateHistory
+from app.domain.enums import TERMINAL_STATUSES, ServiceStatus
+from app.services.ports import (
+    CustomerServiceOrderRecord,
+    OpenServiceOrderRecord,
+    ServiceDetailRecord,
+    ServiceOrderRecord,
+)
 
 
 def _to_order_record(order: ServiceOrder) -> ServiceOrderRecord:
@@ -228,3 +237,118 @@ class SqlServiceOrderRepository:
             .order_by(ServiceOrder.received_at.desc(), ServiceOrder.id.desc())
             .limit(1)
         )
+
+    def list_open(self) -> Sequence[OpenServiceOrderRecord]:
+        """Órdenes "en taller" con cliente, equipo y fecha de entrada al estado.
+
+        Una sola sentencia: el cliente, el equipo y el tipo de dispositivo
+        entran por `JOIN`, y `entered_at` se resuelve con una subconsulta
+        correlacionada del historial. El tablero nunca escala en consultas con
+        la cantidad de filas (R-08).
+        """
+        entered_at = (
+            select(func.max(StateHistory.changed_at))
+            .where(
+                StateHistory.service_order_id == ServiceOrder.id,
+                StateHistory.status == ServiceOrder.status,
+            )
+            .correlate(ServiceOrder)
+            .scalar_subquery()
+        )
+        statement = (
+            select(
+                ServiceOrder.id,
+                Customer.name,
+                Equipment.internal_code,
+                DeviceType.name,
+                ServiceOrder.status,
+                ServiceOrder.received_at,
+                func.coalesce(entered_at, ServiceOrder.received_at),
+            )
+            .join(Customer, Customer.id == ServiceOrder.customer_id)
+            .join(Equipment, Equipment.id == ServiceOrder.equipment_id)
+            .join(DeviceType, DeviceType.id == Equipment.device_type_id)
+            .where(ServiceOrder.status.not_in(list(TERMINAL_STATUSES)))
+            .order_by(ServiceOrder.received_at, ServiceOrder.id)
+        )
+        return [
+            OpenServiceOrderRecord(
+                id=row[0],
+                customer_name=row[1],
+                equipment_internal_code=row[2],
+                device_type_name=row[3],
+                status=ServiceStatus(row[4]).value,
+                received_at=row[5],
+                entered_at=row[6],
+            )
+            for row in self._session.execute(statement)
+        ]
+
+    def count_by_status(self) -> dict[str, int]:
+        """Conteo por estado en una sola agregación; omite los estados vacíos."""
+        rows = self._session.execute(
+            select(ServiceOrder.status, func.count()).group_by(ServiceOrder.status)
+        )
+        return {ServiceStatus(status).value: int(total) for status, total in rows}
+
+    def list_for_equipment(self, equipment_id: int) -> Sequence[ServiceOrderRecord]:
+        """Servicios del equipo, del más reciente al más antiguo (RF-08)."""
+        statement = (
+            select(ServiceOrder)
+            .where(ServiceOrder.equipment_id == equipment_id)
+            .order_by(ServiceOrder.received_at.desc(), ServiceOrder.id.desc())
+        )
+        return [_to_order_record(order) for order in self._session.scalars(statement)]
+
+    def list_details_for_orders(
+        self, service_order_ids: Sequence[int]
+    ) -> Sequence[ServiceDetailRecord]:
+        """Líneas de varias órdenes en una sola consulta (historial sin N+1)."""
+        if not service_order_ids:
+            return []
+        statement = (
+            select(ServiceDetail)
+            .where(ServiceDetail.service_order_id.in_(list(service_order_ids)))
+            .order_by(ServiceDetail.service_order_id, ServiceDetail.id)
+        )
+        return [_to_detail_record(detail) for detail in self._session.scalars(statement)]
+
+    def list_for_customer(
+        self,
+        customer_id: int,
+        *,
+        received_from: datetime | None = None,
+        received_to: datetime | None = None,
+    ) -> Sequence[CustomerServiceOrderRecord]:
+        """Servicios del cliente con el código del equipo, en una sola consulta."""
+        conditions: list[ColumnElement[bool]] = [ServiceOrder.customer_id == customer_id]
+        if received_from is not None:
+            conditions.append(ServiceOrder.received_at >= received_from)
+        if received_to is not None:
+            conditions.append(ServiceOrder.received_at <= received_to)
+        statement = (
+            select(
+                ServiceOrder.id,
+                Equipment.internal_code,
+                ServiceOrder.received_at,
+                ServiceOrder.delivered_at,
+                ServiceOrder.status,
+                ServiceOrder.reported_failure,
+                ServiceOrder.origin_service_id,
+            )
+            .join(Equipment, Equipment.id == ServiceOrder.equipment_id)
+            .where(*conditions)
+            .order_by(ServiceOrder.received_at.desc(), ServiceOrder.id.desc())
+        )
+        return [
+            CustomerServiceOrderRecord(
+                id=row[0],
+                equipment_internal_code=row[1],
+                received_at=row[2],
+                delivered_at=row[3],
+                status=ServiceStatus(row[4]).value,
+                reported_failure=row[5],
+                origin_service_id=row[6],
+            )
+            for row in self._session.execute(statement)
+        ]

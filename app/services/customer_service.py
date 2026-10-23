@@ -9,10 +9,17 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
+from app.domain.enums import ServiceStatus
 from app.domain.errors import DocumentDuplicateError, NotFoundError, ValidationError
-from app.services.ports import CustomerRecord, CustomerRepository
+from app.services.ports import (
+    CustomerRecord,
+    CustomerRepository,
+    CustomerServiceOrderRecord,
+    ServiceOrderRepository,
+)
 
 CUSTOMER_RESOURCE = "el cliente"
 
@@ -27,11 +34,31 @@ class CustomerPage:
     total: int
 
 
+@dataclass(frozen=True, slots=True)
+class ServiceOrderSummary:
+    """Resumen de un servicio dentro del historial del cliente (RF-08)."""
+
+    id: int
+    equipment_internal_code: str
+    received_at: datetime
+    delivered_at: datetime | None
+    status: str
+    status_label: str
+    reported_failure: str
+    origin_service_id: int | None
+
+
 class CustomerService:
     """Casos de uso del cliente sobre el puerto `CustomerRepository`."""
 
-    def __init__(self, repository: CustomerRepository) -> None:
+    def __init__(
+        self,
+        repository: CustomerRepository,
+        *,
+        service_orders: ServiceOrderRepository,
+    ) -> None:
         self._repository = repository
+        self._service_orders = service_orders
 
     def create(
         self,
@@ -66,6 +93,31 @@ class CustomerService:
         """Busca por nombre, teléfono o documento, sin distinguir mayúsculas."""
         items = self._repository.search(query, limit=limit, offset=offset)
         return CustomerPage(items=tuple(items), total=self._repository.count(query))
+
+    def history(
+        self,
+        customer_id: int,
+        *,
+        received_from: datetime | None = None,
+        received_to: datetime | None = None,
+    ) -> list[ServiceOrderSummary]:
+        """Servicios del cliente, del más reciente al más antiguo (RF-08).
+
+        El rango es inclusivo sobre `received_at`. Un cliente sin servicios no
+        es un error: devuelve una lista vacía con `200`.
+        """
+        self.get(customer_id)
+        start = None if received_from is None else _as_utc(received_from)
+        end = None if received_to is None else _as_utc(received_to)
+        if start is not None and end is not None and start > end:
+            raise ValidationError(
+                "from",
+                "El rango de fechas está invertido: 'from' es posterior a 'to'.",
+            )
+        records = self._service_orders.list_for_customer(
+            customer_id, received_from=start, received_to=end
+        )
+        return [_summary(record) for record in records]
 
     def update(self, customer_id: int, changes: Mapping[str, Any]) -> CustomerRecord:
         """Actualiza los campos de contacto recibidos y valida los demás."""
@@ -118,3 +170,22 @@ class CustomerService:
     def _optional_document(value: Any) -> str | None:
         display = str(value).strip() if value is not None else ""
         return display or None
+
+
+def _summary(record: CustomerServiceOrderRecord) -> ServiceOrderSummary:
+    status = ServiceStatus.parse(record.status)
+    return ServiceOrderSummary(
+        id=record.id,
+        equipment_internal_code=record.equipment_internal_code,
+        received_at=_as_utc(record.received_at),
+        delivered_at=None if record.delivered_at is None else _as_utc(record.delivered_at),
+        status=status.value,
+        status_label=status.label,
+        reported_failure=record.reported_failure,
+        origin_service_id=record.origin_service_id,
+    )
+
+
+def _as_utc(moment: datetime) -> datetime:
+    """Reinterpreta como UTC una fecha sin zona (SQLite no conserva la zona)."""
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)

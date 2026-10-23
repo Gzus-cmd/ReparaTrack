@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Historial del equipo {{ equipment.internal_code }} · ReparaTrack{% endblock %}
+{% block content %}
+  <h1>Historial del equipo</h1>
+  <table>
+    <tbody>
+      <tr>
+        <th>Código interno</th>
+        <td>{{ equipment.internal_code }}</td>
+      </tr>
+      <tr>
+        <th>Equipo</th>
+        <td>{{ equipment.device_type.name }} · {{ equipment.brand.name }} · {{ equipment.model }}</td>
+      </tr>
+      <tr>
+        <th>Número de serie</th>
+        <td>{{ equipment.serial_number or "—" }}</td>
+      </tr>
+      <tr>
+        <th>Dueño vigente</th>
+        <td>
+          {{ equipment.current_owner.name ~ " · " ~ equipment.current_owner.phone
+             if equipment.current_owner else "Sin servicios registrados" }}
+        </td>
+      </tr>
+      <tr>
+        <th>Servicios registrados</th>
+        <td>{{ equipment.previous_services_count }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if services %}
+    {% for service in services %}
+      <h2>Servicio #{{ service.id }} · {{ service.status_label }}</h2>
+      <p>
+        Cliente: {{ service.customer.name }} · {{ service.customer.phone }}<br />
+        Recibido: {{ service.received_at.strftime("%Y-%m-%d %H:%M") }} ·
+        Entregado:
+        {{ service.delivered_at.strftime("%Y-%m-%d %H:%M") if service.delivered_at else "—" }}
+      </p>
+      <p>Falla reportada: {{ service.reported_failure }}</p>
+      {% if service.origin_service_id %}
+        <p class="muted">Reingreso vinculado al servicio #{{ service.origin_service_id }}.</p>
+      {% endif %}
+
+      {% if service.details is not none %}
+        <h3>Detalles</h3>
+        {% if service.details %}
+          <table>
+            <thead>
+              <tr>
+                <th>Operación</th>
+                <th>Componente</th>
+                <th>Descripción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for detail in service.details %}
+                <tr>
+                  <td>{{ detail.operation_type.name }}</td>
+                  <td>{{ detail.component.name if detail.component else "—" }}</td>
+                  <td>{{ detail.description }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="muted">Sin líneas de detalle registradas.</p>
+        {% endif %}
+      {% endif %}
+
+      {% if service.states is not none %}
+        <h3>Historial de estados</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha y hora</th>
+              <th>Estado</th>
+              <th>Comentario</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in service.states %}
+              <tr>
+                <td>{{ entry.changed_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                <td>{{ entry.status_label }}</td>
+                <td>{{ entry.comment or "—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    <p class="muted">El equipo no tiene servicios registrados.</p>
+  {% endif %}
+{% endblock %}

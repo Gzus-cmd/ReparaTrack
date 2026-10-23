@@ -87,6 +87,37 @@ class StateHistoryRecord:
     comment: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class OpenServiceOrderRecord:
+    """Orden sin entregar con los datos que el tablero muestra (RF-07).
+
+    `entered_at` es la última fila del historial con el estado actual; si no
+    existiera, cae en `received_at`. El repositorio lo resuelve en la misma
+    consulta con joins, de modo que el tablero no incurre en N+1 (R-08).
+    """
+
+    id: int
+    customer_name: str
+    equipment_internal_code: str
+    device_type_name: str
+    status: str
+    received_at: datetime
+    entered_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerServiceOrderRecord:
+    """Resumen de un servicio para el historial del cliente (RF-08)."""
+
+    id: int
+    equipment_internal_code: str
+    received_at: datetime
+    delivered_at: datetime | None
+    status: str
+    reported_failure: str
+    origin_service_id: int | None
+
+
 @runtime_checkable
 class Clock(Protocol):
     """Puerto del reloj: toda fecha "ahora" entra por aquí."""
@@ -221,9 +252,7 @@ class ServiceOrderRepository(Protocol):
 
     def list_details(self, service_order_id: int) -> Sequence[ServiceDetailRecord]: ...
 
-    def get_detail(
-        self, service_order_id: int, detail_id: int
-    ) -> ServiceDetailRecord | None: ...
+    def get_detail(self, service_order_id: int, detail_id: int) -> ServiceDetailRecord | None: ...
 
     def delete_detail(self, service_order_id: int, detail_id: int) -> bool: ...
 
@@ -232,6 +261,24 @@ class ServiceOrderRepository(Protocol):
     def count_for_equipment(self, equipment_id: int) -> int: ...
 
     def find_current_customer_id(self, equipment_id: int) -> int | None: ...
+
+    def list_open(self) -> Sequence[OpenServiceOrderRecord]: ...
+
+    def count_by_status(self) -> Mapping[str, int]: ...
+
+    def list_for_equipment(self, equipment_id: int) -> Sequence[ServiceOrderRecord]: ...
+
+    def list_for_customer(
+        self,
+        customer_id: int,
+        *,
+        received_from: datetime | None = None,
+        received_to: datetime | None = None,
+    ) -> Sequence[CustomerServiceOrderRecord]: ...
+
+    def list_details_for_orders(
+        self, service_order_ids: Sequence[int]
+    ) -> Sequence[ServiceDetailRecord]: ...
 
 
 @runtime_checkable

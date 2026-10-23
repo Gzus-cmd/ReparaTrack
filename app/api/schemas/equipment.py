@@ -47,3 +47,54 @@ class EquipmentRead(BaseModel):
     created_at: datetime
     current_owner: CustomerReferenceRead | None
     previous_services_count: int
+
+
+class HistoryDetailRead(BaseModel):
+    """Línea de detalle dentro del historial técnico."""
+
+    id: int
+    operation_type: CatalogReferenceRead
+    component: CatalogReferenceRead | None
+    description: str
+    created_at: datetime
+
+
+class HistoryStateRead(BaseModel):
+    """Movimiento de la bitácora dentro del historial técnico."""
+
+    id: int
+    status: str
+    status_label: str
+    changed_at: datetime
+    comment: str | None
+
+
+class HistoryServiceRead(BaseModel):
+    """Servicio previo del equipo con su cliente y las secciones pedidas."""
+
+    id: int
+    customer: CustomerReferenceRead
+    status: str
+    status_label: str
+    received_at: datetime
+    delivered_at: datetime | None
+    reported_failure: str
+    physical_condition: str
+    accessories: str
+    password_requested: bool
+    origin_service_id: int | None
+    states: list[HistoryStateRead] | None = Field(
+        description="Bitácora del servicio; `null` cuando la sección no se pidió."
+    )
+    details: list[HistoryDetailRead] | None = Field(
+        description="Líneas de trabajo; `null` cuando la sección no se pidió."
+    )
+
+
+class EquipmentHistoryRead(BaseModel):
+    """Historial técnico completo del equipo (RF-08)."""
+
+    equipment: EquipmentRead
+    services: list[HistoryServiceRead] = Field(
+        description="Servicios del equipo, del más reciente al más antiguo."
+    )

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Equipos en taller · ReparaTrack{% endblock %}
+{% block content %}
+  <h1>Equipos en taller</h1>
+  <p class="muted">
+    Servicios sin entregar, del más antiguo al más reciente. Los días se cuentan
+    sobre la fecha de negocio en Lima.
+  </p>
+
+  {% if items %}
+    <table>
+      <thead>
+        <tr>
+          <th>Equipo</th>
+          <th>Cliente</th>
+          <th>Estado</th>
+          <th>Días desde la recepción</th>
+          <th>Alerta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+          <tr>
+            <td>
+              <a href="/equipments/{{ item.equipment_internal_code }}/history">
+                {{ item.equipment_internal_code }}
+              </a>
+              · {{ item.device_type }}
+            </td>
+            <td>{{ item.customer_name }}</td>
+            <td>{{ item.status_label }}</td>
+            <td>{{ item.days_since_reception }} días</td>
+            <td>
+              {% if item.is_over_threshold %}
+                <span class="tag">{{ item.threshold_rule }}</span>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No hay equipos en taller.</p>
+  {% endif %}
+
+  <h2>Resumen por estado</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Estado</th>
+        <th>Servicios</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for label, total in status_rows %}
+        <tr>
+          <td>{{ label }}</td>
+          <td>{{ total }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Alertas de umbral</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Regla</th>
+        <th>Umbral</th>
+        <th>Servicios</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for alert in alerts %}
+        <tr>
+          <td>{{ alert.rule }}</td>
+          <td>{{ alert.threshold_days }} días</td>
+          <td>{{ alert.count }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p><a href="/reception">Registrar recepción</a></p>
+{% endblock %}

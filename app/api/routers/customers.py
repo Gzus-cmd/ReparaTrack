@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Annotated
+
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import SessionDep, build_customer_service
@@ -10,7 +13,9 @@ from app.api.schemas.customers import (
     CustomerPage,
     CustomerRead,
     CustomerUpdate,
+    ServiceOrderSummaryRead,
 )
+from app.services.customer_service import ServiceOrderSummary
 from app.services.ports import CustomerRecord
 
 router = APIRouter(prefix="/customers", tags=["clientes"])
@@ -69,3 +74,38 @@ def update_customer(customer_id: int, payload: CustomerUpdate, session: SessionD
     """Actualiza solo los campos enviados del contacto."""
     changes = payload.model_dump(exclude_unset=True)
     return _to_read(build_customer_service(session).update(customer_id, changes))
+
+
+@router.get(
+    "/{customer_id}/history",
+    response_model=list[ServiceOrderSummaryRead],
+    summary="Servicios del cliente con filtro por rango de recepción",
+)
+def get_customer_history(
+    customer_id: int,
+    session: SessionDep,
+    received_from: Annotated[
+        datetime | None, Query(alias="from", description="Fecha de recepción mínima (inclusiva).")
+    ] = None,
+    received_to: Annotated[
+        datetime | None, Query(alias="to", description="Fecha de recepción máxima (inclusiva).")
+    ] = None,
+) -> list[ServiceOrderSummaryRead]:
+    """Devuelve los servicios del cliente, del más reciente al más antiguo."""
+    items = build_customer_service(session).history(
+        customer_id, received_from=received_from, received_to=received_to
+    )
+    return [_summary_to_read(item) for item in items]
+
+
+def _summary_to_read(item: ServiceOrderSummary) -> ServiceOrderSummaryRead:
+    return ServiceOrderSummaryRead(
+        id=item.id,
+        equipment_internal_code=item.equipment_internal_code,
+        received_at=item.received_at,
+        delivered_at=item.delivered_at,
+        status=item.status,
+        status_label=item.status_label,
+        reported_failure=item.reported_failure,
+        origin_service_id=item.origin_service_id,
+    )

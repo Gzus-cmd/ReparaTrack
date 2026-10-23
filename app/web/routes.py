@@ -19,10 +19,12 @@ from app.api.deps import (
     SessionDep,
     build_catalog_service,
     build_customer_service,
+    build_dashboard_service,
     build_equipment_service,
     build_service_detail_service,
     build_service_order_service,
 )
+from app.domain.enums import ServiceStatus
 from app.domain.errors import DomainError
 from app.services.service_order_service import NewEquipment
 
@@ -37,6 +39,27 @@ CATALOG_SECTIONS: tuple[tuple[str, str], ...] = (
     ("components", "Componentes"),
     ("operation-types", "Tipos de operación"),
 )
+
+
+# --- T-28: tablero de equipos en taller ---------------------------------------
+
+
+@router.get("/", response_class=HTMLResponse, summary="Tablero de equipos en taller")
+def dashboard_page(request: Request, session: SessionDep, clock: ClockDep) -> HTMLResponse:
+    """Muestra los equipos en taller con su resumen por estado y sus alertas."""
+    service = build_dashboard_service(session, clock)
+    summary = service.summary()
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        {
+            "items": service.workbench(),
+            "status_rows": [
+                (status.label, summary.by_status[status.value]) for status in ServiceStatus
+            ],
+            "alerts": list(summary.alerts.values()),
+        },
+    )
 
 
 def _redirect(message: str | None = None) -> RedirectResponse:
@@ -190,6 +213,26 @@ async def create_reception_form(
             request, session, error="Revise los datos del formulario e intente nuevamente."
         )
     return RedirectResponse(url=f"/service-orders/{order.id}", status_code=303)
+
+
+# --- T-30: historial técnico del equipo ---------------------------------------
+
+
+@router.get(
+    "/equipments/{equipment_ref}/history",
+    response_class=HTMLResponse,
+    summary="Historial técnico completo del equipo",
+)
+def equipment_history_page(
+    request: Request, equipment_ref: str, session: SessionDep
+) -> HTMLResponse:
+    """Muestra servicios, estados y detalles; acepta id, código interno o serial."""
+    history = build_equipment_service(session).history(equipment_ref)
+    return templates.TemplateResponse(
+        request,
+        "equipment_history.html",
+        {"equipment": history.equipment, "services": history.services},
+    )
 
 
 @router.get(

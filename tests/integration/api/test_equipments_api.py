@@ -12,6 +12,11 @@ import pytest
 from sqlalchemy import delete, func, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from support.factories import (
+    add_diagnostic_detail,
+    drive_to,
+    reception_payload,
+)
 
 from app.db.models import Brand, CodeCounter, Customer, DeviceType, Equipment, ServiceOrder
 from app.db.repositories.equipment_repository import (
@@ -401,3 +406,140 @@ def test_lookup_reports_previous_services_and_current_owner(client, session: Ses
         "name": "Ana Pérez",
         "phone": "999111222",
     }
+
+
+# --- T-30: historial técnico completo del equipo (RF-08) ----------------------
+
+ORDERS_API = "/api/v1/service-orders"
+
+
+def _history(client, reference, **params):
+    return client.get(f"{API}/{reference}/history", params=params)
+
+
+def _receive_for_equipment(client, customer, equipment_id: int, failure: str) -> dict:
+    payload = reception_payload(customer.id, equipment_id=equipment_id, reported_failure=failure)
+    response = client.post(ORDERS_API, json=payload)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_equipment_history_composes_services_states_and_details(
+    client, session: Session, clock
+) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    equipment = _post_equipment(client, device_type_id, brand_id, serial_number="SN-1").json()
+
+    first_customer = Customer(name="Ana Pérez", phone="999111222")
+    second_customer = Customer(name="Luis Rojas", phone="999333444")
+    third_customer = Customer(name="Eva Torres", phone="999555666")
+    session.add_all([first_customer, second_customer, third_customer])
+    session.flush()
+
+    first = _receive_for_equipment(client, first_customer, equipment["id"], "No enciende")
+    drive_to(client, session, first["id"], "DELIVERED")
+
+    clock.travel(days=2)
+    second = _receive_for_equipment(client, second_customer, equipment["id"], "Se apaga sola")
+    add_diagnostic_detail(client, session, second["id"])
+
+    clock.travel(days=2)
+    third = _receive_for_equipment(client, third_customer, equipment["id"], "Pantalla rota")
+    session.get(ServiceOrder, third["id"]).origin_service_id = first["id"]
+    session.flush()
+
+    response = _history(client, equipment["id"])
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["equipment"]["id"] == equipment["id"]
+    assert body["equipment"]["internal_code"] == "EQ-000001"
+    assert body["equipment"]["serial_number"] == "SN-1"
+    assert body["equipment"]["current_owner"]["name"] == "Eva Torres"
+    assert body["equipment"]["previous_services_count"] == 3
+
+    services = body["services"]
+    assert [service["id"] for service in services] == [third["id"], second["id"], first["id"]]
+    assert [service["customer"]["name"] for service in services] == [
+        "Eva Torres",
+        "Luis Rojas",
+        "Ana Pérez",
+    ]
+    assert [service["status"] for service in services] == ["RECEIVED", "RECEIVED", "DELIVERED"]
+    assert [service["status_label"] for service in services] == [
+        "Recibido",
+        "Recibido",
+        "Entregado",
+    ]
+    assert services[0]["origin_service_id"] == first["id"]
+    assert services[2]["origin_service_id"] is None
+
+    assert [entry["status"] for entry in services[2]["states"]] == [
+        "RECEIVED",
+        "DIAGNOSING",
+        "AWAITING_APPROVAL",
+        "IN_REPAIR",
+        "READY_FOR_PICKUP",
+        "DELIVERED",
+    ]
+    assert [entry["status_label"] for entry in services[1]["states"]] == ["Recibido"]
+    delivered_detail = services[2]["details"][0]
+    assert delivered_detail["operation_type"]["name"] == "Diagnóstico"
+    assert delivered_detail["component"] is None
+    assert delivered_detail["description"] == "Diagnóstico de placa"
+    assert delivered_detail["created_at"]
+    assert [detail["description"] for detail in services[1]["details"]] == ["Diagnóstico de placa"]
+    assert services[0]["details"] == []
+
+
+def test_equipment_history_include_filters_sections(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    equipment = _post_equipment(client, device_type_id, brand_id).json()
+    customer = Customer(name="Ana Pérez", phone="999111222")
+    session.add(customer)
+    session.flush()
+    order = _receive_for_equipment(client, customer, equipment["id"], "No enciende")
+    add_diagnostic_detail(client, session, order["id"])
+
+    both = _history(client, equipment["id"]).json()["services"][0]
+    assert both["states"] is not None
+    assert both["details"] is not None
+
+    only_details = _history(client, equipment["id"], include="details").json()["services"][0]
+    assert only_details["states"] is None
+    assert [detail["description"] for detail in only_details["details"]] == ["Diagnóstico de placa"]
+
+    only_states = _history(client, equipment["id"], include="states").json()["services"][0]
+    assert only_states["details"] is None
+    assert [entry["status"] for entry in only_states["states"]] == ["RECEIVED"]
+
+
+def test_equipment_history_accepts_id_internal_code_and_serial(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    equipment = _post_equipment(client, device_type_id, brand_id, serial_number="SN-1").json()
+
+    by_id = _history(client, equipment["id"])
+    by_code = _history(client, "EQ-000001")
+    by_serial = _history(client, "SN-1")
+
+    assert by_id.status_code == by_code.status_code == by_serial.status_code == 200
+    assert by_id.json() == by_code.json() == by_serial.json()
+
+
+def test_equipment_history_unknown_reference_returns_404(client) -> None:
+    response = _history(client, "EQ-999999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_equipment_history_rejects_an_unknown_section(client, session: Session) -> None:
+    device_type_id, brand_id = _seeded_ids(session)
+    equipment = _post_equipment(client, device_type_id, brand_id).json()
+
+    response = _history(client, equipment["id"], include="details,adjuntos")
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "validation_error"
+    assert error["details"]["field"] == "include"
